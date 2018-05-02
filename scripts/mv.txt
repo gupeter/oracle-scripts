@@ -1,0 +1,453 @@
+select userenv('language') from dual;
+
+select a.cpu_time,     
+      a.optimizer_mode,       
+      a.executions,        
+      a.disk_reads,      
+      a.sharable_mem,     
+      a.buffer_gets,    
+      a.command_type,     
+      a.sql_text,        
+      a.sharable_mem,        
+      a.persistent_mem,        
+      a.runtime_mem,        
+      a.parse_calls,        
+      a.disk_reads,        
+      a.direct_writes,        
+      a.concurrency_wait_time,        
+      a.user_io_wait_time   
+from v$sqlarea a  
+where parsing_schema_name = 'db_users'--schema  
+order by a.cpu_time desc
+
+set linesize 400
+set pagesize 9999
+col event format a60
+select event,
+       sum(decode(wait_Time, 0, 0, 1)) "Prev",
+       sum(decode(wait_Time, 0, 1, 0)) "Curr",
+       count(*) "Tot"
+  from v$session_Wait
+ group by event
+ order by 4;
+
+--根据pid查sql_id
+select sid,serial#,username,sql_hash_value,sql_id,
+       to_char(logon_time,'yyyy/mm/dd hh24:mi:ss') as login_time
+  from v$session  where paddr in (select addr from v$process where spid=26507);
+  
+批量插入重复忽略：
+declare
+   n_count integer := 0;
+   cursor wt_cur1 is select * from whitelist_new;
+  begin
+   for wt in wt_cur1 loop
+     begin
+        insert into whitelist values (wt.ID,wt.BATCHID,wt.MERID,wt.BANKACCNO,wt.BANKACCTYPE,wt.BANKACCNAME,wt.BANKNAME,wt.CERTTYPE,wt.CERTNO,wt.MOBILE,wt.ADDRESS,wt.EMAIL,wt.AUTHDATE,wt.AUTHTIME,wt.STATUS,wt.TRANSSRC,wt.UPLOADDATE,wt.UPLOADTIME,wt.MODIFYTIME,wt.OPERID);
+        exception
+          when others then
+          null;
+     end;
+       n_count := n_count + 1;
+       if n_count >= 5000 then
+        commit;
+        n_count := 0;
+      end if;
+    end loop;
+  commit;
+  exception
+  when others then
+  null;
+  end;
+  /
+
+--快速批量更新5000commit
+DECLARE
+v_err_info char(4000);
+TYPE RowIDTab IS TABLE OF ROWID INDEX BY BINARY_INTEGER;
+errors int;
+error_code int;
+CURSOR cur IS SELECT rowid FROM a;
+myrowid rowid;
+v_rowid RowIDTab;
+--TYPE rowid_table_type IS TABLE OF rowid index by pls_integer;
+--v_rowid rowid_table_type;
+BEGIN
+OPEN cur;
+LOOP
+FETCH cur BULK COLLECT INTO v_rowid LIMIT 5000;--5000行提交一次
+EXIT WHEN v_rowid.count=0;
+--begin
+FORALL i IN v_rowid.FIRST..v_rowid.LAST SAVE EXCEPTIONS
+update a set id=id+1 where rowid=v_rowid(i);
+  COMMIT;
+  --DBMS_LOCK.SLEEP(2);
+/*exception
+     when others then
+     begin
+       errors := SQL%BULK_EXCEPTIONS.COUNT;
+       FOR err1 IN 1..errors LOOP
+        dbms_output.put_line('Total Bad Rows: '||errors); 
+     error_code := SQL%BULK_EXCEPTIONS(err1).ERROR_CODE;
+     myrowid := v_rowid(SQL%BULK_EXCEPTIONS(err1).ERROR_INDEX);
+     dbms_output.put_line(error_code||'-'||myrowid);
+       END LOOP;
+       end;
+       end; */  
+END LOOP;
+exception
+when others then
+v_err_info:=dbms_utility.format_error_backtrace || dbms_utility.format_error_stack ;
+  v_err_info:=replace(replace(v_err_info,chr(10),' '),chr(13),' ');
+  dbms_output.put_line(v_err_info);
+commit;
+CLOSE cur;
+END;
+/
+
+查询主外键：
+select (select a.table_name
+          from user_constraints a
+         where a.constraint_name = c.r_constraint_name) "主表表名",
+       c.r_constraint_name "主表主键键约束名",
+       c.table_name "从表表名",
+       c.constraint_name "从表外键约束名"
+  from dba_constraints c
+ where c.constraint_type = 'R' and OWNER='NPS';
+ 
+创建dblink
+create database link npslk connect to nps identified by NoahPS_6#12  using 'sc'; 
+select * from dba_db_links;
+drop public database link dblinkname;
+ 
+查询主键
+select distinct cu.TABLE_NAME from user_cons_columns cu, 
+user_constraints au where cu.constraint_name = au.constraint_name and au.constraint_type = 'P' and cu.TABLE_NAME not like 'BIN%';
+
+原库建立物化视图日志
+select 'create materialized view log on '||table_name||' with rowid;' from user_tables where table_name not like 'BIN%';
+
+目标库建立物化视图
+有主键
+select 'create materialized view '||tname||'  ON prebuilt TABLE refresh fast ON demand for update as select * from '||tname||'@NPSLK;' 
+from tab where tname in (select tname from (
+select tname,TABLE_NAME FROM tab a, (select * from user_constraints where constraint_type='P')  b
+where a.tname not like 'BIN$%' and a.tname not like 'MLOG$%' and a.tname not like 'RUPD$%'
+and a.tname=b.TABLE_NAME(+)
+group by tname,TABLE_NAME) where TABLE_NAME is not null);
+
+无主键
+select 'create materialized view '||tname||' refresh fast with rowid ON demand for update as select * from '||tname||'@NPSLK;'
+from tab where tname in (select tname from (
+select tname,TABLE_NAME FROM tab a, (select * from user_constraints where constraint_type='P')  b
+where a.tname not like 'BIN$%' and a.tname not like 'RUPD$%' and a.tname not like 'MLOG$%'
+and a.tname=b.TABLE_NAME(+)
+group by tname,TABLE_NAME) where TABLE_NAME is null);
+
+
+
+
+create materialized view new_mvSENDCHNLFILE  refresh fast with rowid on demand for update as select * from mvSENDCHNLFILE;
+
+EXEC dbms_mview.refresh('ACCBOOKDTL','F');
+ 
+ 刷新
+SELECT 'begin dbms_mview.refresh(''mv'||tname||''',METHOD=>''F'',PARALLELISM=>1); end; /' FROM tab where tname not like 'BIN$%' and tname not like 'MLOG$%'
+
+创建同义词
+select 'create synonym '||table_name||' for mvDEDUCT_BATCH_DETAIL;
+ 
+select sum(bytes)/1024/1024/ from user_segments where SEGMENT_TYPE='TABLE'
+
+exec dbms_auto_task_admin.disable(client_name => 'sql tuning advisor', operation=> NULL,window_name => NULL);
+select count(*) from dba_MVIEW_logs;
+select count(*) from ALL_MVIEWS where owner='NPS';
+
+---未完成的分布式事务处理：
+SQL> select local_tran_id, global_tran_id from dba_2pc_pending;
+
+LOCAL_TRAN_ID
+------------------------------------------------------------------
+GLOBAL_TRAN_ID
+------------------------------------------------------------------
+10.29.4902
+NPS.a336987f.10.29.4902
+
+SQL> execute dbms_transaction.purge_lost_db_entry('10.29.4902');
+
+PL/SQL procedure successfully completed.
+
+SQL> commit;
+
+Commit complete.
+
+SQL> select local_tran_id, global_tran_id from dba_2pc_pending;
+
+no rows selected
+
+drop materialized view NEW_MVSENDCHNLFILE;
+
+===================
+物化视图on prebuilt table
+===================
+1.创建同名表
+原端：
+create MATERIALIZED VIEW LOG ON abc;
+
+目标端：
+create table mv1 as select * from abc@npslk where 1=0;
+alter table AREA_CODE add primary key (AREACODE);
+alter table BANKCODE add primary key (BANKNO);
+create materialized view AREA_CODE ON prebuilt TABLE refresh fast ON demand for update as select * from AREA_CODE@npslk;
+exec dbms_mview.refresh('MV1','COMPLETE');
+-------------更改字段(注意需要没有dml操作)
+drop MATERIALIZED VIEW mv1;
+alter table abc add name varchar2(50);
+alter table mv1 add name varchar2(50);
+create materialized view ABCDE ON prebuilt TABLE refresh fast ON demand for update as select * from abc@npslk;
+
+
+
+
+
+查看job
+select job,LAST_DATE,LAST_SEC,NEXT_DATE,NEXT_SEC,TOTAL_TIME,what from user_jobs;
+
+select PRIMARY_KEY,SNAPSHOT_ID from user_snapshot_logs where LOG_TABLE='MLOG$_
+
+sar -n DEV 1|grep eth0
+select userenv('sid') from dual;
+
+根据pid查询进程状态
+select s.status from v$process pr,v$session s
+where pr.addr=s.paddr and pr.spid=&spid
+
+调度job
+create or replace procedure applymv2     
+ is                                                 
+ begin                                              
+   dbms_mview.refresh(list=> 
+   'MVCHECKTYACCOUNTDTLS'
+   ,METHOD=>'F',PARALLELISM=>1);
+   end;                                             
+   /    
+
+查看表空间使用：
+select a.tablespace_name,total,case when free is not null then free else 0 end free,
+case when b.free is not null then total-free else 100 end used 
+from 
+( select tablespace_name,sum(bytes)/1024/1024 total from dba_data_files
+   group by tablespace_name) a, 
+( select tablespace_name,sum(bytes)/1024/1024 free from dba_free_space
+   group by tablespace_name) b
+where a.tablespace_name=b.tablespace_name(+); 
+
+select sum(TOTAL)/1024 g from (
+select a.tablespace_name,total,case when free is not null then free else 0 end free,
+case when b.free is not null then total-free else 100 end used 
+from 
+( select tablespace_name,sum(bytes)/1024/1024 total from dba_data_files
+   group by tablespace_name) a, 
+( select tablespace_name,sum(bytes)/1024/1024 free from dba_free_space
+   group by tablespace_name) b
+where a.tablespace_name=b.tablespace_name(+));
+
+创建表空间
+select 'create tablespace '||a.TABLESPACE_NAME||' datafile '''||name||''' size '||a.bytes/1024/1024||'m' 
+from  dba_data_files a,v$datafile b where a.FILE_ID=b.FILE#;
+
+select 'create tablespace '||a.TABLESPACE_NAME||' datafile ''+data'' size '||1024||'m AUTOEXTEND ON NEXT 256M MAXSIZE UNLIMITED;'
+from  DBA_TABLESPACES a where a.TABLESPACE_NAME not in ('SYSTEM','SYSAUX','UNDOTBS1','USERS');
+
+
+查看imp进度
+SELECT sid,serial# FROM V$SESSION where username='NPS';
+
+SET SERVEROUTPUT ON
+create or replace procedure imp1
+is
+v VARCHAR2(64);
+fileID UTL_FILE.FILE_TYPE;
+begin
+fileID:= UTL_FILE.FOPEN('DMP','test.txt','W');
+for i in 1..100 loop
+select event into v from v$session_wait where sid=577;
+UTL_FILE.PUT_LINE(fileID,v);
+dbms_lock.sleep(1);
+end loop;
+UTL_FILE.FCLOSE(fileID);
+end;
+/
+
+
+alter session set nls_date_format='yyyy-mm-dd hh24:mi:ss';
+
+建job
+declare
+    job1 number;
+begin
+    sys.dbms_job.submit(job => job1,
+    what => 'applymv4;',
+    next_date => to_date('17-06-2015 15:00:00', 'dd-mm-yyyy hh24:mi:ss'),
+    interval => 'sysdate + 10800/86400');
+    commit;
+end;
+/
+
+exec dbms_job.change(5,'applymv3;',to_date('06-07-2015  23:04:53', 'dd-mm-yyyy hh24:mi:ss'),'sysdate + 10800/86400');
+commit;
+
+
+查询job号
+select job from user_jobs;
+
+运行job
+begin
+   dbms_job.run(5);
+end;
+/
+
+---停止job  25是建立的job test_job_really  
+begin  
+dbms_job.broken(5,true);  
+commit;  
+end;
+/
+
+
+select broken,last_date,next_date from dba_jobs where job=
+
+删除
+begin
+   dbms_job.remove(8);
+end;
+/
+
+
+删除用户
+drop user ×× cascade;      
+create user nps identified by oracle default tablespace npsdata;
+alter user nps temporary tablespace npstemp; 
+
+
+导出expdp
+select DIRECTORY_NAME,DIRECTORY_PATH from DBA_DIRECTORIES;
+create or replace directory DUMP_DIR as '/dmp';
+grant read,write on directory DUMP_DIR to ;
+expdp nps/nps schemas=nps directory=dump_dir dumpfile =expdp.dmp log=log.log tables=whitelist exclude=TABLE:\"LIKE\'MLOG$%\'\"
+
+检查失效对象
+
+col OWNER format a30
+col OBJECT_NAME format a30
+col OBJECT_TYPE format a30
+SELECT owner, object_name, object_type,status 
+FROM dba_objects 
+WHERE status = 'INVALID' and owner in (select username from dba_users where account_status='OPEN' and username not in ('SYS','SYSTEM'));
+
+
+impdp/expdp 状态
+select owner_name,job_name ,state from dba_datapump_jobs;
+     
+     
+col PROFILE format a30
+col RESOURCE_NAME format a30
+col RESOURCE_TYPE format a30
+col LIMIT format a30
+
+select * from dba_profiles where profile='DBA';
+
+alter profile DEFAULT limit FAILED_LOGIN_ATTEMPTS unlimited;
+
+set linesize 400
+set pagesize 9999
+col USERNAME format a30
+col ACCOUNT_STATUS format a30
+col PROFILE format a30
+select USERNAME,PROFILE,ACCOUNT_STATUS from dba_users where ACCOUNT_STATUS='OPEN';
+
+select count(*),username from v$session where status='ACTIVE' group by username;
+
+
+set linesize 400
+col LAST_SEC format a30
+col NEXT_SEC format a30
+col what format a30
+select JOB,LAST_DATE,LAST_SEC,NEXT_DATE,NEXT_SEC,TOTAL_TIME,WHAT from all_jobs;
+
+查看权限
+COL TABLE_NAME format a30
+col PRIVILEGE format a30
+SELECT GRANTEE,TABLE_NAME,PRIVILEGE FROM dba_tab_privs WHERE GRANTEE in 
+(select username from dba_users where account_status='OPEN' 
+AND USERNAME NOT IN ('SYS','SYSMAN','SYSTEM'));
+
+具体权限
+select * from dba_sys_privs where GRANTEE=
+
+
+增加主键
+select 'alter table '||a.TABLE_NAME||' add constraint '||'p'||a.TABLE_NAME||' primary key ('||wm_concat(b.COLUMN_NAME)||');' 
+from user_cons_columns b,user_constraints a, TAB C
+where a.CONSTRAINT_NAME=b.CONSTRAINT_NAME and a.TABLE_NAME=b.TABLE_NAME and  B.TABLE_NAME=C.TNAME
+and  c.TNAME not like 'BIN$%' and c.TNAME not like 'MLOG$%'
+AND constraint_type='P'
+group by a.TABLE_NAME;
+
+
+有主键
+select tname from (
+select tname,TABLE_NAME FROM tab a, (select * from user_constraints where constraint_type='P')  b
+where a.tname not like 'BIN$%' and a.tname not like 'MLOG$%'
+and a.tname=b.TABLE_NAME(+)
+group by tname,TABLE_NAME) where TABLE_NAME is not null
+
+select constraint_type, COUNT(*) from TAB A, user_constraints B 
+where A.tname=B.TABLE_NAME(+)
+and tname not like 'BIN$%' and tname not like 'MLOG$%'
+GROUP BY constraint_type;
+
+SELECT TNAME FROM (
+SELECT tname,TABLE_NAME FROM TAB@npslk A, user_constraints@npslk B 
+WHERE A.tname=B.TABLE_NAME(+) AND tname not like 'BIN$%' and tname not like 'MLOG$%'
+ GROUP BY tname,TABLE_NAME) WHERE TABLE_NAME IS NULL
+
+
+select dbms_metadata.get_ddl('TABLE','DEDUCT_BATCH_DETAIL_HIS','NPS') from dual;
+
+查看索引
+set linesize 400
+col index_name format a30
+col INDEX_TYPE format a30
+col COLUMN_NAME format a30
+select a.index_name,a.INDEX_TYPE,b.COLUMN_NAME from user_indexes a,user_ind_columns b where a.TABLE_NAME=b.TABLE_NAME and a.index_name=b.index_name
+and a.TABLE_NAME='
+
+select INDEX_NAME, COLUMN_NAME from user_ind_columns where TABLE_NAME='
+ 
+在线重定义表
+--检查
+exec dbms_redefinition.can_redef_table('NPS', 'DEDUCT_BATCH_DETAIL_HIS_TMP', dbms_redefinition.cons_use_pk);
+--开始复制数据
+exec dbms_redefinition.start_redef_table('NPS', 'DEDUCT_BATCH_DETAIL_HIS_TMP', 'DEDUCT_BATCH_DETAIL_HIS_TMP1');
+--开始copy依赖对象
+
+declare
+num_errors PLS_INTEGER;
+BEGIN
+DBMS_REDEFINITION.COPY_TABLE_DEPENDENTS('NPS', 'DEDUCT_BATCH_DETAIL_HIS_TMP', 'DEDUCT_BATCH_DETAIL_HIS_TMP1',DBMS_REDEFINITION.CONS_ORIG_PARAMS, TRUE, TRUE, TRUE, TRUE, num_errors);
+end;
+/
+
+--查看出错对象
+select object_name, base_table_name, ddl_txt from DBA_REDEFINITION_ERRORS;
+
+--同步数据
+exec dbms_redefinition.sync_interim_table('NPS', 'DEDUCT_BATCH_DETAIL_HIS_TMP', 'DEDUCT_BATCH_DETAIL_HIS_TMP1');
+--结束重定义
+exec dbms_redefinition.finish_redef_table('NPS', 'DEDUCT_BATCH_DETAIL_HIS_TMP', 'DEDUCT_BATCH_DETAIL_HIS_TMP1');
+
+--异常结束
+exec DBMS_REDEFINITION.abort_redef_table('NPS', 'DEDUCT_BATCH_DETAIL_HIS_TMP', 'DEDUCT_BATCH_DETAIL_HIS_TMP1');
+
+execute dbms_stats.gather_table_stats(ownname => 'NPS',tabname => 'DEDUCT_REAL_TMP' ,estimate_percent => null ,method_opt => 'for all indexed columns' ,cascade => true);

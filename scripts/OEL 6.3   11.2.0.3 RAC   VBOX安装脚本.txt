@@ -1,0 +1,232 @@
+﻿select userenv('language') from dual;
+
+
+
+1. 配置/etc/hosts  网络
+
+
+
+192.168.1.181   vmac1   vmac1.oracle.com
+192.168.1.182   vmac1-vip  
+
+192.168.1.183   vmac2   vmac2.oracle.com
+192.168.1.184   vmac2-vip
+
+
+192.168.1.186   vmac-cluster vmac-cluster-scan
+
+
+172.168.1.18   vmac1-priv
+172.168.1.19   vmac2-priv
+
+
+关闭FIREWALL和Disable SElinux
+
+ vi /etc/selinux/config   ==>SELINUX=disabled
+ 
+ 
+
+
+2. 创建用户和组
+
+groupadd -g 5000 asmadmin
+groupadd -g 5001 asmdba
+groupadd -g 5002 asmoper
+groupadd -g 6000 oinstall
+groupadd -g 6001 dba
+groupadd -g 6002 oper 
+
+
+useradd -g oinstall -G asmadmin,asmdba,asmoper grid  
+useradd -g oinstall -G dba,asmdba              oracle
+
+
+passwd oracle
+
+passwd grid
+
+
+mkdir /s01
+mkdir /g01
+
+chown oracle:oinstall /s01
+
+chown grid:oinstall   /g01
+
+3. 安装
+
+[root@vmac6 ~]# cd /etc/yum.repos.d
+
+[root@vmac6 yum.repos.d]# mv public-yum-ol6.repo public-yum-ol6.repo.bak
+
+[root@vmac6 yum.repos.d]# touch public-yum-ol6.repo
+
+[root@vmac6 yum.repos.d]# vi public-yum-ol6.repo
+
+[oel6]
+name = Enterprise Linux 6.3 DVD
+baseurl=file:///media/"OL6.3 x86_64 Disc 1 20120626"/Server
+gpgcheck=0
+enabled=1
+
+
+[root@vmac1 ~]# yum install oracle-rdbms-server-11gR2-preinstall-1.0-6.el6
+
+
+# grid-rdbms-server-11gR2-preinstall setting for nofile soft limit is 1024
+grid   soft   nofile    1024
+
+# grid-rdbms-server-11gR2-preinstall setting for nofile hard limit is 65536
+grid   hard   nofile    65536
+
+# grid-rdbms-server-11gR2-preinstall setting for nproc soft limit is 2047
+grid   soft   nproc    2047
+
+# grid-rdbms-server-11gR2-preinstall setting for nproc hard limit is 16384
+grid   hard   nproc    16384
+
+# grid-rdbms-server-11gR2-preinstall setting for stack soft limit is 10240KB
+grid   soft   stack    10240
+
+# grid-rdbms-server-11gR2-preinstall setting for stack hard limit is 32768KB
+grid   hard   stack    32768
+
+
+4.
+修改vmac2的IP
+cd /etc/udev/rules.d/
+
+vi 70-persistent-net.rules 
+
+
+
+5. 配置共享存储
+
+
+for i in b c d e f g ;
+do
+echo "KERNEL==\"sd*\", BUS==\"scsi\", PROGRAM==\"/sbin/scsi_id --whitelisted --replace-whitespace --device=/dev/\$name\", RESULT==\"`/sbin/scsi_id --whitelisted --replace-whitespace --device=/dev/sd$i`\", NAME=\"asm-disk$i\", OWNER=\"grid\", GROUP=\"asmadmin\", MODE=\"0660\""      >> /etc/udev/rules.d/99-oracle-asmdevices.rules
+done
+
+
+
+ /sbin/start_udev
+ 
+ 
+ 
+ 6.配置grid 用户profile 
+ 
+mkdir /g01/orabase 
+ 
+1号节点：
+
+
+export GRID_HOME=/g01/11ggrid/app/11.2.0/grid
+export ORACLE_HOME=/g01/11ggrid/app/11.2.0/grid
+export PATH=$GRID_HOME/bin:$GRID_HOME/OPatch:/sbin:/bin:/usr/sbin:/usr/bin
+
+export ORACLE_SID=+ASM1
+export LD_LIBRARY_PATH=$GRID_HOME/lib:$GRID_HOME/lib32
+
+export ORACLE_BASE=/g01/orabase
+export ORA_NLS10=$ORACLE_HOME/nls/data
+export NLS_LANG="Simplified Chinese"_China.AL32UTF8
+ 
+2号节点：
+
+
+export GRID_HOME=/g01/11ggrid/app/11.2.0/grid
+export ORACLE_HOME=/g01/11ggrid/app/11.2.0/grid
+export PATH=$GRID_HOME/bin:$GRID_HOME/OPatch:/sbin:/bin:/usr/sbin:/usr/bin
+
+export ORACLE_SID=+ASM2
+export LD_LIBRARY_PATH=$GRID_HOME/lib:$GRID_HOME/lib32
+
+export ORACLE_BASE=/g01/orabase
+export ORA_NLS10=$ORACLE_HOME/nls/data
+export NLS_LANG="Simplified Chinese"_China.AL32UTF8
+
+
+root用户的环境变量
+
+
+export GRID_HOME=/g01/11ggrid/app/11.2.0/grid
+export ORACLE_HOME=/g01/11ggrid/app/11.2.0/grid
+export PATH=$GRID_HOME/bin:$GRID_HOME/OPatch:/sbin:/bin:/usr/sbin:/usr/bin
+
+
+oracle用户的环境变量
+
+mkdir /s01/orabase
+
+export ORACLE_HOME=/s01/oracle/app/oracle/product/11.2.0/dbhome_1
+export PATH=$ORACLE_HOME/bin:$ORACLE_HOME/OPatch:/sbin:/bin:/usr/sbin:/usr/bin
+
+export ORACLE_SID=PROD1
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:$ORACLE_HOME/lib32
+
+export ORACLE_BASE=/s01/orabase
+export ORA_NLS10=$ORACLE_HOME/nls/data
+export NLS_LANG="Simplified Chinese"_China.AL32UTF8
+ 
+ 
+ 
+ 
+ 
+ 
+ 7. 打PSU补丁
+ 
+ 
+ 
+ opatch lspatches  ==> 检查PSU补丁
+ 
+ 
+ su - root
+ 
+ $GRID_HOME/crs/install/rootcrs.pl -unlock
+ 
+ AIX上： su - root;  slibclean
+ 
+ su -  grid 
+ 
+ opatch napply -oh $GRID_HOME -local /tmp/patch/14727310
+ opatch napply -oh $GRID_HOME -local /tmp/patch/15876003/
+
+
+su - oracle
+
+[oracle@vmac1 scripts]$ /tmp/patch/15876003/custom/server/15876003/custom/scripts/prepatch.sh -dbhome $ORACLE_HOME
+/tmp/patch/15876003/custom/server/15876003/custom/scripts/prepatch.sh completed successfully.
+
+opatch napply -oh $ORACLE_HOME -local /tmp/patch/15876003/custom/server/15876003
+opatch napply -oh $ORACLE_HOME -local /tmp/patch/14727310
+
+
+/tmp/patch/15876003/custom/server/15876003/custom/scripts/postpatch.sh -dbhome $ORACLE_HOME
+
+
+su - root
+
+[root@vmac1 ~]# /g01/11ggrid/app/11.2.0/grid/rdbms/install/rootadd_rdbms.sh 
+[root@vmac1 ~]# /g01/11ggrid/app/11.2.0/grid/crs/install/rootcrs.pl -patch
+
+
+
+SELECT x.ksppinm NAME, y.ksppstvl VALUE, x.ksppdesc describ
+ FROM SYS.x$ksppi x, SYS.x$ksppcv y
+ WHERE x.inst_id = USERENV ('Instance')
+ AND y.inst_id = USERENV ('Instance')
+ AND x.indx = y.indx
+AND x.ksppinm like '%high%';
+
+完整:
+第一步：
+#hostname oratest 
+第二步：
+修改/etc/sysconfig/network中的hostname
+第三步：
+修改/etc/hosts文件
+SQL> alter system set "_high_priority_processes"='LMS*' scope=spfile;
+
+System altered.
+

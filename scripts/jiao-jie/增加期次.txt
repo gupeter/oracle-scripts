@@ -1,0 +1,56 @@
+增加期次
+
+alter session set nls_timestamp_format='yyyy-mm-dd hh24:mi:ss'
+select * from TMS_MAIN_ISSUE where LOTTERY_CODE=300 order by to_number(name) desc --290007  2016190
+select * from TMS_MAIN_ISSUE where LOTTERY_CODE=301 order by to_number(name) desc
+select * from TMS_MAIN_ISSUE where LOTTERY_CODE=302 order by to_number(name) desc --289099
+select * from user_sequences
+select max(id) from TMS_MAIN_ISSUE
+select SEQ_TMS_MAIN_ISSUE.NEXTVAL from dual
+
+--------------胜负彩
+begin
+  for i in 2016191..2016199 loop
+  insert into TMS_MAIN_ISSUE(id,lottery_code,name) values(SEQ_TMS_MAIN_ISSUE.NEXTVAL,'300',i);
+  end loop;
+  --commit;
+  end;
+  
+begin
+  for i in 2017001..2017200 loop
+  insert into TMS_MAIN_ISSUE(id,lottery_code,name) values(SEQ_TMS_MAIN_ISSUE.NEXTVAL,'300',i);
+  end loop;
+  --commit;
+  end;
+  
+  -------------------------------半全场
+  begin
+  for i in 2016191..2016205 loop
+  insert into TMS_MAIN_ISSUE(id,lottery_code,name) values(SEQ_TMS_MAIN_ISSUE.NEXTVAL,'301',i);
+  end loop;
+  commit;
+  end;
+  
+    begin
+  for i in 2017001..2017200 loop
+  insert into TMS_MAIN_ISSUE(id,lottery_code,name) values(SEQ_TMS_MAIN_ISSUE.NEXTVAL,'301',i);
+  end loop;
+  commit;
+  end;
+------------------------------进球彩
+
+    begin
+  for i in 2016191..2016205 loop
+  insert into TMS_MAIN_ISSUE(id,lottery_code,name) values(SEQ_TMS_MAIN_ISSUE.NEXTVAL,'302',i);
+  end loop;
+  commit;
+  end;
+  
+    begin
+  for i in 2017001..2017200 loop
+  insert into TMS_MAIN_ISSUE(id,lottery_code,name) values(SEQ_TMS_MAIN_ISSUE.NEXTVAL,'302',i);
+  end loop;
+  commit;
+  end;
+  
+  

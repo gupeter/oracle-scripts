@@ -1,0 +1,203 @@
+declare
+  my_task_id number;
+  obj_id number;
+  my_task_name varchar2(100);
+  my_task_desc varchar2(500);
+ begin
+  my_task_name :='advisor_test tab Advice'; 
+  my_task_desc :='Manual Segment Advisor Run'; 
+  dbms_advisor.create_task(
+  advisor_name => 'Segment Advisor', 
+  task_id => my_task_id,
+  task_name => my_task_name,
+  task_desc =>my_task_desc);
+  dbms_advisor.create_object(
+  task_name=>my_task_name,
+  object_type=>'TABLESPACE',     
+  attr1=>'LOTTERY',          
+  attr2 => NULL,   
+  attr3 => NULL,
+  attr4=>null,
+  attr5=>null,
+  object_id=>obj_id);
+  dbms_advisor.set_task_parameter(
+  task_name => my_task_name,
+  parameter=>'recommend_all',
+  value=>'TRUE');
+  dbms_advisor.execute_task(my_task_name);
+ end;
+ /
+ 
+ select tablespace_name, segment_name, segment_type, partition_name,recommendations, c1   
+from table(dbms_space.asa_recommendations('FALSE', 'TRUE', 'FALSE'));
+
+ select 
+  'Task name    :'||f.task_name||chr(13)||chr(10)||  
+  'Segment name  :'||o.attr2    ||chr(13)||chr(10)||
+  'Sement type  :'||o.type    ||chr(13)||chr(10)||
+  'partition name:'||o.attr3    ||chr(13)||chr(10)||
+  'Message      :'||f.message  ||chr(13)||chr(10)||
+  'More info    :'||f.more_info TASK_ADVICE
+  from dba_advisor_findings f,dba_advisor_objects o
+ where o.task_id=f.task_id
+  and o.object_id=f.object_id
+  and f.task_name = 'advisor_test tab Advice'
+ order by f.task_name;
+ 
+ col frag format 999999.99
+col owner format a30;
+col table_name format a30;
+select * from (
+select a.owner,
+ a.table_name,
+ a.num_rows,
+ a.avg_row_len * a.num_rows,
+ (b.bytes),
+ (a.avg_row_len * a.num_rows) /(b.bytes) frag
+ from dba_tables a, dba_segments b
+ where a.table_name = b.segment_name
+and a.owner= b.owner
+and b.segment_name='ABC');
+
+
+begin
+for i in 1..1000 loop
+insert into abc values(i);
+end loop;
+end;
+/
+
+alter table ABC shrink space
+
+set serveroutput on
+
+declare
+TOTAL_BLOCKS number;
+TOTAL_BYTES number;
+UNUSED_BLOCKS number;
+UNUSED_BYTES number;
+LAST_USED_EXTENT_FILE_ID number;
+LAST_USED_EXTENT_BLOCK_ID number;
+LAST_USED_BLOCK number;
+
+begin 
+     dbms_space.unused_space(
+         'LOTTERY', 
+         'LOBSEGMENT1', 
+         'LOB',
+         TOTAL_BLOCKS, 
+         TOTAL_BYTES, 
+         UNUSED_BLOCKS, 
+         UNUSED_BYTES,
+         LAST_USED_EXTENT_FILE_ID, 
+         LAST_USED_EXTENT_BLOCK_ID,
+         LAST_USED_BLOCK);
+
+     dbms_output.put_line('TOTAL_BLOCKS = '||TOTAL_BLOCKS);
+     dbms_output.put_line('UNUSED_BLOCKS = '||UNUSED_BLOCKS);
+end;
+/
+
+
+set serveroutput on 
+
+declare
+v_unformatted_blocks number;
+v_unformatted_bytes number;
+v_fs1_blocks number;
+v_fs1_bytes number;
+v_fs2_blocks number;
+v_fs2_bytes number;
+v_fs3_blocks number;
+v_fs3_bytes number;
+v_fs4_blocks number;
+v_fs4_bytes number;
+v_full_blocks number;
+v_full_bytes number;
+
+begin
+     dbms_space.space_usage (
+       'LOTTERY', 
+       'MAC_LOTBILLREC', 
+       'TABLE', 
+       v_unformatted_blocks,
+       v_unformatted_bytes, 
+       v_fs1_blocks, 
+       v_fs1_bytes, 
+       v_fs2_blocks, 
+       v_fs2_bytes,
+       v_fs3_blocks, 
+       v_fs3_bytes, 
+       v_fs4_blocks, 
+       v_fs4_bytes, 
+       v_full_blocks, 
+       v_full_bytes);
+
+     dbms_output.put_line('Unformatted Blocks                       = '||v_unformatted_blocks);
+     dbms_output.put_line('Blocks with 00-25% free space   = '||v_fs1_blocks);
+     dbms_output.put_line('Blocks with 26-50% free space   = '||v_fs2_blocks);
+     dbms_output.put_line('Blocks with 51-75% free space   = '||v_fs3_blocks);
+     dbms_output.put_line('Blocks with 76-100% free space = '||v_fs4_blocks);
+     dbms_output.put_line('Full Blocks                                        = '||v_full_blocks);
+end;
+/
+
+exec dbms_stats.gather_schema_stats(ownname => 'LOTTERY', ptions => 'GATHER AUTO',estimate_percent => dbms_stats.auto_sample_size,  method_opt => 'for all columns size auto', cascade=>TRUE,degree => 8 ) ;
+
+exec dbms_stats.gather_schema_stats(ownname          => 'LOTTERY',options          => 'GATHER AUTO',estimate_percent => dbms_stats.auto_sample_size,method_opt       => 'for all columns size auto',degree           => 8)   
+
+
+case when print_state=0 then '已入库'
+when print_state=1 then '等待出票'
+when print_state=2 then '已送票'
+when print_state=3 then '出票中'
+when print_state=4 then '出票成功'
+when print_state=5 then '限号失败'
+when print_state=6 then '出错票'
+when print_state=7 then '出票失败'
+when print_state=8 then '暂缓出票'
+when print_state=9 then '其他' end printstat
+
+col TBS_NAME format a20
+col SUM_SPACE format a20
+col USED_SPACE format a20
+col FREE_SPACE format a20
+col PCT_USED format a20
+
+---修改每日运行时间
+exec dbms_scheduler.disable( name => 'MONDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'MONDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=MON;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'MONDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'TUESDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'TUESDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=TUE;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'TUESDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'WEDNESDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'WEDNESDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=WED;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'WEDNESDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'THURSDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'THURSDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=THU;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'THURSDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'FRIDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'FRIDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=FRI;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'FRIDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'SATURDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'SATURDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=SAT;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'SATURDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'SUNDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'SUNDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=SUN;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'SUNDAY_WINDOW');
+
+--修改周末运行持续时间
+exec dbms_scheduler.disable( name => 'SATURDAY_WINDOW', force => TRUE);
+exec DBMS_SCHEDULER.SET_ATTRIBUTE('SATURDAY_WINDOW', 'DURATION', '+000 04:00:00');
+exec dbms_scheduler.enable( name => 'SATURDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'SUNDAY_WINDOW', force => TRUE);
+exec DBMS_SCHEDULER.SET_ATTRIBUTE('SUNDAY_WINDOW', 'DURATION', '+000 04:00:00');
+exec dbms_scheduler.enable( name => 'SUNDAY_WINDOW');

@@ -1,0 +1,254 @@
+
+  
+  select sum(used)/1024 from (
+  select a.tablespace_name,total,case when free is not null then free else 0 end free,
+case when b.free is not null then total-free else 100 end used 
+from 
+( select tablespace_name,sum(bytes)/1024/1024 total from dba_data_files
+   group by tablespace_name) a, 
+( select tablespace_name,sum(bytes)/1024/1024 free from dba_free_space
+   group by tablespace_name) b
+where a.tablespace_name=b.tablespace_name(+)); 
+
+
+groupadd -g 504 oinstall
+groupadd -g 505 dba
+groupadd -g 506 oper
+
+mount -o loop -t iso9660 /soft/CentOS-5.5-x86_64-bin-DVD-1of2.iso  /mnt/cent1
+
+yum install binutils-* elfutils-libelf-* compat-* pdksh-* libgcc-* libstdc++-* \
+libaio-* make-* sysstat-* unixODBC-*
+
+yum install setarch-2* \
+compat-libstdc++-33-3* \
+make-3* \
+glibc-2* \
+openmotif-2* \
+compat-db-4* \
+gcc-4* \
+libaio-0* \
+rsh-* \
+compat-gcc-34* \
+compat-gcc-34-c++* \
+openmotif22* 
+
+for i in c d ;
+do
+echo "KERNEL==\"sd$i\", BUS==\"scsi\", PROGRAM==\"/sbin/scsi_id -g -u -s %p\", RESULT==\"`scsi_id -g -u -s /block/sd$i`\", NAME=\"asm-disk$i\", OWNER=\"oracle\", GROUP=\"oinstall\", MODE=\"0660\""
+done
+
+alter system set local_listener='(ADDRESS=(PROTOL=TCP)(HOST=192.168.56.102)(PORT=1521))' scope=both sid='orcl1';
+alter system set local_listener='(ADDRESS=(PROTOL=TCP)(HOST=192.168.56.103)(PORT=1521))' scope=both sid='orcl2';
+
+
+
+alter system set LOG_ARCHIVE_CONFIG='DG_CONFIG=(RAC,dgrac)';
+alter system set LOG_ARCHIVE_DEST_1='LOCATION=+arch VALID_FOR=(online_LOGFILES,primary_ROLES) DB_UNIQUE_NAME=rac' scope=both;
+alter system set LOG_ARCHIVE_DEST_2='SERVICE=dgrac lgwr SYNC NET_TIMEOUT=10 REOPEN=15 VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=dgrac' scope=both;
+alter system set LOG_ARCHIVE_DEST_3='LOCATION=+arch/RAC/standbylog  VALID_FOR=(STANDBY_LOGFILES,STANDBY_ROLE) DB_UNIQUE_NAME=rac' scope=both;
+alter system set LOG_ARCHIVE_DEST_STATE_1=ENABLE;
+alter system set LOG_ARCHIVE_DEST_STATE_2=DEFER ;
+alter system set LOG_ARCHIVE_DEST_STATE_3=ENABLE;
+alter system set REMOTE_LOGIN_PASSWORDFILE=EXCLUSIVE scope=spfile;
+alter system set LOG_ARCHIVE_MAX_PROCESSES=3;
+alter system set fal_server='dgrac';
+alter system set fal_client='rac1' sid='rac1';
+alter system set fal_client='rac2' sid='rac2';
+alter system set DB_FILE_NAME_CONVERT='/data/','+DATA/orcl/datafile/','/data/','+DATA/orcl/tempfile/' scope=spfile;
+alter system set LOG_FILE_NAME_CONVERT='/data/','+DATA/orcl/onlinelog/' scope=spfile;
+alter system set STANDBY_FILE_MANAGEMENT=AUTO;
+alter system set "_log_deletion_policy"=ALL scope=spfile sid='*';
+
+DB_NAME=rac
+DB_UNIQUE_NAME=dgrac
+LOG_ARCHIVE_CONFIG='DG_CONFIG=(rac,dgrac)'
+*.control_files='+DATA/dgrac/controlfile/control1.ctl'
+DB_FILE_NAME_CONVERT='+DATA','+DATA'
+LOG_FILE_NAME_CONVERT='+DATA','+DATA'
+LOG_ARCHIVE_DEST_1='LOCATION=+arch VALID_FOR=(ALL_LOGFILES,ALL_ROLES) DB_UNIQUE_NAME=dgrac' 
+LOG_ARCHIVE_DEST_2='SERVICE=rac SYNC lgwr NET_TIMEOUT=10 REOPEN=15 VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=rac'
+fal_server=rac1,rac2
+fal_client=dgrac
+LOG_ARCHIVE_DEST_STATE_1=ENABLE
+LOG_ARCHIVE_DEST_STATE_2=ENABLE
+STANDBY_FILE_MANAGEMENT=AUTO
+REMOTE_LOGIN_PASSWORDFILE=EXCLUSIVE
+LOG_ARCHIVE_FORMAT=%t_%s_%r.arc
+LOG_ARCHIVE_MAX_PROCESSES=3
+compatible='11.2.0.4.0'
+sga_target=16G
+sga_max_size=16G
+pga_aggregate_target=5G
+
+chmod 6751 /u01/app/oracle/product/11.2.0/db_1/bin/oracle
+chown oracle:asmadmin /u01/app/oracle/product/11.2.0/db_1/bin/oracle
+
+
+rman target sys/oracle@rac auxiliary sys/oracle@dgrac
+run {
+allocate channel prmy1 type disk;
+allocate auxiliary channel stby type disk;
+duplicate target database for standby from active database nofilenamecheck ;
+}
+
+-------------------------------------------------------------------------------------------
+DB_NAME=orcl
+SERVICE_NAME=orcl
+DB_UNIQUE_NAME=dgorcl
+LOG_ARCHIVE_CONFIG='DG_CONFIG=(orcl,dgorcl)'
+*.control_files='/data/control1.ctl'
+DB_FILE_NAME_CONVERT='+DATA/orcl/datafile/','/data/','+DATA/orcl/tempfile/','/data/'
+LOG_FILE_NAME_CONVERT='+DATA/orcl/onlinelog','/data/'
+LOG_ARCHIVE_DEST_1='LOCATION=/arch VALID_FOR=(ALL_LOGFILES,ALL_ROLES) DB_UNIQUE_NAME=dgorcl' 
+LOG_ARCHIVE_DEST_2='SERVICE=orcl SYNC VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=orcl'
+LOG_ARCHIVE_DEST_3='LOCATION=/arch/standby  VALID_FOR=(STANDBY_LOGFILES,STANDBY_ROLE) DB_UNIQUE_NAME=dgorcl'
+fal_server=orcl1,orcl2
+fal_client=dgorcl
+LOG_ARCHIVE_DEST_STATE_1=ENABLE
+LOG_ARCHIVE_DEST_STATE_2=ENABLE
+LOG_ARCHIVE_DEST_STATE_3=ENABLE
+STANDBY_FILE_MANAGEMENT=AUTO
+REMOTE_LOGIN_PASSWORDFILE=EXCLUSIVE
+LOG_ARCHIVE_FORMAT=%t_%s_%r.arc
+LOG_ARCHIVE_MAX_PROCESSES=2
+compatible='10.2.0.5.0'
+
+
+
+run {
+allocate channel c1 device type disk format '/backup/ctl_2U.bak' connect sys/oracle@orcl2;
+allocate auxiliary channel ac1 device type disk format '/backup/ctl_2U.bak';
+duplicate target database for standby nofilenamecheck dorecover;
+ }
+ 
+ 
+ 
+alter database add standby logfile thread 1 group 17 '+data' size 512m;
+alter database add standby logfile thread 1 group 18 '+data' size 512m;
+alter database add standby logfile thread 1 group 19 '+data' size 512m;
+alter database add standby logfile thread 1 group 20 '+data' size 512m;
+alter database add standby logfile thread 1 group 21 '+data' size 512m;
+alter database add standby logfile thread 2 group 22 '+data' size 512m;
+alter database add standby logfile thread 2 group 23 '+data' size 512m;
+alter database add standby logfile thread 2 group 24 '+data' size 512m;
+alter database add standby logfile thread 2 group 25 '+data' size 512m;
+alter database add standby logfile thread 2 group 26 '+data' size 512m;
+
+alter database add standby logfile thread 1 group 17 '/data/redo17' size 512m;
+alter database add standby logfile thread 1 group 18 '/data/redo18' size 512m;
+alter database add standby logfile thread 1 group 19 '/data/redo19' size 512m;
+alter database add standby logfile thread 1 group 20 '/data/redo20' size 512m;
+alter database add standby logfile thread 1 group 21 '/data/redo21' size 512m;
+alter database add standby logfile thread 1 group 22 '/data/redo22' size 512m;
+ 
+ 
+ 
+ 
+ 
+ 
+alter system set LOG_ARCHIVE_CONFIG='';
+alter system set LOG_ARCHIVE_DEST_1='LOCATION=+fra' scope=spfile;
+alter system set LOG_ARCHIVE_DEST_2='' scope=spfile;
+alter system set LOG_ARCHIVE_DEST_3='' scope=spfile;
+alter system set LOG_ARCHIVE_DEST_STATE_1=ENABLE;
+alter system set LOG_ARCHIVE_DEST_STATE_2=ENABLE;
+alter system set LOG_ARCHIVE_DEST_STATE_3=ENABLE;
+alter system set REMOTE_LOGIN_PASSWORDFILE=EXCLUSIVE scope=spfile;
+alter system set LOG_ARCHIVE_MAX_PROCESSES=3;
+alter system set fal_server='';
+alter system set fal_client='';
+alter system set fal_client='';
+alter system set DB_FILE_NAME_CONVERT='' scope=spfile;
+alter system set LOG_FILE_NAME_CONVERT='' scope=spfile;
+alter system set STANDBY_FILE_MANAGEMENT=AUTO;
+
+
+=======================asm迁移文件系统
+run {
+allocate auxiliary channel c1 device type disk;
+set newname for datafile 1 to '/data3/dg/system01.dbf';
+set newname for datafile 2 to '/data3/dg/undotbs1.dbf';
+set newname for datafile 3 to '/data3/dg/sysaux.dbf';
+set newname for datafile 4 to '/data3/dg/undotbs2';
+set newname for datafile 5 to '/data3/dg/users';
+set newname for datafile 6 to '/data3/dg/lottery.dbf';
+set newname for datafile 7 to '/data3/dg/undo4s1.dbf';
+set newname for datafile 8 to '/data3/dg/undo4s2.dbf';
+set newname for datafile 9 to '/data3/dg/lottery_index.dbf';
+set newname for TEMPFILE 1 to '/data3/dg/temp1';
+set newname for TEMPFILE 2 to '/data3/dg/temp2';
+set newname for TEMPFILE 3 to '/data3/dg/temp3';
+set newname for TEMPFILE 4 to '/data3/dg/temp4';
+duplicate target database for standby dorecover;
+}
+
+
+DB_NAME=SRV
+DB_UNIQUE_NAME=dg
+LOG_ARCHIVE_CONFIG='DG_CONFIG=(SRV,dg)'
+*.control_files='/data/dg/control1.ctl'
+DB_FILE_NAME_CONVERT='+DGCTL1/srv/datafile/','/data3/dg/','+DGDATA/','/data3/dg/','+DGTEMP/srv/datafile/','/data3/dg/','+DGDATA/srv/datafile/','/data3/dg/'
+LOG_FILE_NAME_CONVERT='+DGCTL1/srv/onlinelog/','/data3/dg/','+DGCTL2/srv/onlinelog/','/data3/dg/','+DGCTL3/srv/onlinelog/','/data3/dg/'
+LOG_ARCHIVE_DEST_1='LOCATION=/data3/arch VALID_FOR=(ALL_LOGFILES,ALL_ROLES) DB_UNIQUE_NAME=dg' 
+LOG_ARCHIVE_DEST_2='SERVICE=srv SYNC VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=srv'
+LOG_ARCHIVE_DEST_3='LOCATION=/data3/dg/standby  VALID_FOR=(STANDBY_LOGFILES,STANDBY_ROLE) DB_UNIQUE_NAME=dg'
+fal_server=srv1,srv2
+fal_client=dg
+LOG_ARCHIVE_DEST_STATE_1=ENABLE
+LOG_ARCHIVE_DEST_STATE_2=ENABLE
+LOG_ARCHIVE_DEST_STATE_3=ENABLE
+STANDBY_FILE_MANAGEMENT=AUTO
+REMOTE_LOGIN_PASSWORDFILE=EXCLUSIVE
+LOG_ARCHIVE_FORMAT=%t_%s_%r.arc
+LOG_ARCHIVE_MAX_PROCESSES=2
+compatible='10.2.0.5.0'
+
+
+alter system set LOG_ARCHIVE_CONFIG='DG_CONFIG=(SRV,dg)';
+alter system set LOG_ARCHIVE_DEST_1='LOCATION=+DGCTL3 VALID_FOR=(ALL_LOGFILES,ALL_ROLES) DB_UNIQUE_NAME=SRV' scope=both;
+alter system set LOG_ARCHIVE_DEST_2='SERVICE=dg lgwr SYNC VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=dg' scope=both;
+alter system set LOG_ARCHIVE_DEST_STATE_1=ENABLE;
+alter system set LOG_ARCHIVE_DEST_STATE_2=defer;
+alter system set REMOTE_LOGIN_PASSWORDFILE=EXCLUSIVE scope=both;
+alter system set LOG_ARCHIVE_MAX_PROCESSES=3;
+alter system set fal_server='dg';
+alter system set fal_client='srv1' sid='srv1';
+alter system set fal_client='srv2' sid='srv2';
+alter system set DB_FILE_NAME_CONVERT='+DGCTL1/srv/datafile/','/data3/dg/','+DGDATA/','/data3/dg/','+DGTEMP/srv/datafile/','/data3/dg/','+DGDATA/srv/datafile/','/data3/dg/' scope=both;
+alter system set LOG_FILE_NAME_CONVERT='+DGCTL1/srv/onlinelog/','/data3/dg/','+DGCTL2/srv/onlinelog/','/data3/dg/','+DGCTL3/srv/onlinelog/','/data3/dg/' scope=both;
+alter system set STANDBY_FILE_MANAGEMENT=AUTO;
+
+
+
+run{
+allocate channel 'c1' type disk;
+sql 'alter system archive log current';
+backup format ='/data3/backup/ora10g_%d_%T_%s' database include current controlfile for standby plus archivelog format='/data3/backup/arch_%d_%T_%s';
+release channel c1;
+}
+
+alter database add standby logfile group 13 '/data3/dg/st13' size 100m;
+alter database add standby logfile group 14 '/data3/dg/st14' size 100m;
+alter database add standby logfile group 15 '/data3/dg/st15' size 100m;
+alter database add standby logfile group 16 '/data3/dg/st16' size 100m;
+alter database add standby logfile group 17 '/data3/dg/st17' size 100m;
+alter database add standby logfile group 18 '/data3/dg/st18' size 100m;
+alter database add standby logfile group 19 '/data3/dg/st19' size 100m;
+alter database add standby logfile group 20 '/data3/dg/st20' size 100m;
+alter database add standby logfile group 21 '/data3/dg/st21' size 100m;
+
+
+ALTER DATABASE COMMIT TO SWITCHOVER TO PHYSICAL STANDBY;
+alter database commit to switchover to physical standby with session shutdown --有活动会话
+ALTER DATABASE COMMIT TO SWITCHOVER TO PRIMARY;
+
+
+q--非实时
+alter database recover managed standby database cancel;
+alter database recover managed standby database using current logfile disconnect from session;
+
+select SEQUENCE# ,APPLIED from v$archived_log;
+select SWITCHOVER_STATUS from v$database;
+select OPEN_MODE  ,DATABASE_ROLE,SWITCHOVER_STATUS from v$database;
+

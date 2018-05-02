@@ -1,0 +1,419 @@
+set timing on;
+set linesize 400;
+set pagesize 999;
+set serverout on;
+select sql_id,spid from v$process a,v$session b where a.addr=b.paddr and sid in (select sid from v$mystat group by sid);
+
+select sql_id,spid from v$process a,v$session b where a.addr=b.paddr and sid=4756
+
+--设置event（ora）
+alter system set events='942 trace name errorstack forever,level 3' ;
+alter system set events='942 trace name errorstack off';
+
+--设置event 查看control
+oradebug setospid 8944
+oradebug unlimit
+oradebug event 942 trace name errorstack level 3
+oradebug dump controlf 3
+oradebug close_trace
+
+--查看端口
+netstat -tnlp
+
+--查看当前session和system设置event
+oradebug setmypid
+oradebug eventdump session;
+或
+oradebug eventdump system;
+
+---查看最近一次checkpoint
+select dbid,to_char(checkpoint_change#) from v$database;
+
+---查看temp实际使用多少
+select * from gv$temp_extent_pool
+
+Select f.tablespace_name,
+       sum(f.bytes_free + f.bytes_used) / 1024 / 1024 / 1024 "total GB",
+       sum((f.bytes_free + f.bytes_used) - nvl(p.bytes_used, 0)) / 1024 / 1024 / 1024 "Free GB",
+       sum(nvl(p.bytes_used, 0)) / 1024 / 1024 / 1024 "Used GB"
+  from sys.v_$temp_space_header f,
+       dba_temp_files           d,
+       sys.v_$temp_extent_pool  p
+ where f.tablespace_name(+) = d.tablespace_name
+   and f.file_id(+) = d.file_id
+   and p.file_id(+) = d.file_id
+ group by f.tablespace_name;
+
+SELECT se.username,
+　　sid,
+　　serial#,
+　　sql_address,
+　　machine,
+　　program,
+　　tablespace,
+　　segtype,
+　　contents
+　　FROM v$session se,
+　　v$sort_usage su
+　　WHERE se.saddr=su.session_addr;
+
+---undo
+select segment_name,status,count(*) from DBA_UNDO_EXTENTS
+group by segment_name,status
+
+--查看session资源情况（当前)
+ select a.*,b.name from v$sesstat a,V$STATNAME b where a.STATISTIC#=b.STATISTIC# 
+ 
+--查看asm磁盘
+powermt display dev=emcpowercy
+
+---按大小查找排除alert并移动到trac
+find ./ -size +1M -type f ! -name alert_maxguage1.log -exec mv {} trac \;
+
+oradebug setmypid
+oradebug unlimit
+oradebug dump systemstate 266
+wait 90 seconds
+oradebug dump systemstate 266
+wait 90 seconds
+oradebug dump systemstate 266
+quit
+
+oradebug setmypid 42802
+oradebug unlimit
+oradebug -g all hanganalyze 3 
+等1~2分钟
+
+---查看'library cache lock' 锁住的对象
+查看hanganalyze的trace
+'100*mode+namespace = 0x4f0003 --取前4位 16进制转换10进制 --79
+
+SELECT indx,kglstdsc FROM x$kglst
+WHERE kglsttyp='NAMESPACE' and indx=79; ----查看锁住的对象
+
+
+--查看表引用外键
+  select c1.table_name      as org_table_name,
+         c1.constraint_name as org_constraint_name,
+         c1.constraint_type as org_constriant_type,
+         n1.column_name     as org_colun_name,
+         c2.table_name      as ref_table_name,
+         c2.constraint_type as ref_constraint_type,
+         c2.constraint_name as ref_constraint_name,
+         n2.column_name     as ref_column_name
+    from dba_constraints  c1,
+         dba_constraints  c2,
+         dba_cons_columns n1,
+         dba_cons_columns n2
+   where c1.owner = 'GVDU'
+     and c1.table_name IN
+         ('VDU_DOMAIN', 'VDU_MANAGED_SERVER', 'SERVER_SPEC_PROP_DATA')
+     and n1.constraint_name = c1.constraint_name
+     and n1.owner = c1.owner
+     and c2.constraint_type = 'R'
+     and c2.r_constraint_name = c1.constraint_name
+     and n2.owner = c2.owner
+     and n2.constraint_name = c2.constraint_name;
+
+--快速杀回话
+ALTER SYSTEM KILL SESSION 'sid,serial#' IMMEDIATE 
+
+--清楚会话cache
+ alter session set events 'immediate trace name flush_cache'; 
+
+/*+ materialize */
+ /*+driving_site(main)*/ 抽取表到main库
+
+--查看表最后dml操作时间
+SELECT max(ora_rowscn) FROM zhuliang.ZHUL_KPI_2014PHOTO_USERS
+select scn_to_timestamp(14582723254993)  from dual;
+
+oradebug setospid 61836
+oradebug unlimit
+oradebug event 10046 trace name context forever,level 12;
+oradebug tracefile_name;
+
+40 10 * * * /njry/te.sh
+
+oradebug event 10046 trace name context off;
+alter session set db_file_multiblock_read_count=128;
+
+--查看绑定变量
+select dbms_sqltune.extract_binds(bind_data) bind,ANYDATA.accesstimestamp (value_anydata) from v$sql ;
+
+ select position, value_string from table(dbms_sqltune.extract_binds('BEDA0B20040058BFD67A000101F0021602C102'))
+
+SELECT SQL_ID,NAME, POSITION, value_string,  ANYDATA.accesstimestamp (value_anydata)
+  From V$sql_Bind_Capture A
+
+--查看时间段内的sql和event
+ select count(*), sql_id, event
+  from (SELECT a.*
+          FROM dba_hist_active_sess_history a
+         where sample_time between
+               to_date('2016-12-26 07:30:00', 'yyyy-mm-dd hh24:mi:ss') and
+               to_date('2016-12-26 07:40:00', 'yyyy-mm-dd hh24:mi:ss')) 
+ group by sql_id, event
+ order by 1 desc
+ 
+     v$session_wait                           （当前正在发生）
+    v$session_wait_history             （会话最近的10次等待事件）
+    v$active_session_history          （内存中的ASH采集信息，理论为1小时）
+    wrh$_active_session_history    （写入AWR库中的ASH信息，理论为1小时以上）
+    dba_hist_active_sess_history   （根据wrh$_active_session_history生成的视图）
+
+--查询长时间sql
+select * from table(dbms_xplan.display_cursor('3ufax4z2a37j2',null,'ALLSTATS LAST PEEKED_BINDS'));
+SELECT s.SID,
+   sum(S.TIME_REMAINING) || '秒' "还要执行多久",
+    sum(S.ELAPSED_SECONDS) || '秒' "已经执行了多久",
+        SUM(ROUND(S.SOFAR * 100 / S.TOTALWORK, 0)) / COUNT(S.SID) || '%' "进度数值"
+   FROM gV$SESSION_LONGOPS S
+   where SID = 232
+   group by SID
+
+
+----SP如果报错打印信息
+exception when others then
+  v_err_info:=dbms_utility.format_error_backtrace || dbms_utility.format_error_stack ;
+  v_err_info:=replace(replace(v_err_info,chr(10),' '),chr(13),' ');
+  dbms_output.put_line(v_err_info);
+ 
+ -----查看缓存数据量
+ select NUM_BUF,HEADER from X$KCBOQH where OBJ#=4959086
+
+alter session set statistics_level=ALL;
+select * from table(dbms_xplan.display_cursor('42uy0rh3gg0ys','0','ADVANCED ALLSTATS LAST PEEKED_BINDS'));
+select * from table(dbms_xplan.display_cursor('75rcnhggwzhk6',null,'ADVANCED ALLSTATS LAST PEEKED_BINDS'));
+select * from table(dbms_xplan.display_cursor(null,null,'ADVANCED ALLSTATS LAST PEEKED_BINDS'));
+
+---关闭数据库，检查文件头scn的差值
+set linesize 400
+col dfname format a40
+select id,
+       dfname,
+       ctl_df_hd,
+       df_scn,
+       crt_scn,
+       ceil((cast(scn_to_timestamp(crt_scn)as date) -
+            cast(scn_to_timestamp(df_scn) as date)) * 24 * 60 * 60) delay_seconds
+  from (select b.FILE# id,
+               trim(a.name) dfname,
+               a.checkpoint_change# ctl_df_hd,
+               b.checkpoint_change# df_scn,
+               (select to_char(current_scn) from v$database) crt_scn
+          from v$datafile_header a, v$datafile b
+         where a.file# = b.file#) scn_view
+order by scn_view.id;
+
+
+---查看redo，undo
+select ss.name,ms.value  from v$mystat ms,v$sysstat ss
+where ms.statistic#=ss.statistic#
+and ss.name in ('undo change vector size','redo size');
+
+----隐含参数
+select a.ksppinm name,b.ksppstvl value,a.ksppdesc description
+from x$ksppi a,x$ksppcv b
+where a.inst_id = USERENV ('Instance')
+and b.inst_id = USERENV ('Instance')
+and a.indx = b.indxr
+and a.ksppinm in ('_small_table_threshold')
+
+---查看事物的产生的undo
+select used_ublk,ubablk from v$transaction where addr=(select taddr from v$
+session where sid=11);
+
+alter session set db_file_multiblock_read_count=128;
+
+ps -ef|grep LOCAL=NO|grep -v grep|awk '{print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10}'
+
+ps -ef|grep LOCAL=NO|grep -v grep|awk '{print "kill -9 " $2}'
+ps -ef|grep LOCAL=NO|grep -v grep|awk '{print "kill -9 " $2}' |sh
+
+ select ora_hash(sub_cumulate_item,3)+1,COUNT(*) from data_sync.cbs_user_disct_detail_cumulate
+ GROUP BY ora_hash(sub_cumulate_item,3)+1                                                     
+=============io 多块===
+     select f.file#,
+       f.name,
+       s.phyrds,
+       s.phyblkrd,
+       s.readtim, --所有的读取工作信息
+       s.singleblkrds,
+       s.singleblkrdtim, --Single Block I/O
+       (s.phyblkrd - s.singleblkrds) as multiblkrd, --Multi Block I/O次数
+       (s.readtim - s.singleblkrdtim) as multiblkrdtim, --Multi Block I/O时间
+       round(s.singleblkrdtim /
+             decode(s.singleblkrds, 0, 1, s.singleblkrds),
+             3) as singleblk_avgtim, --Single Block I/O 平均等待时间（cs）
+       round((s.readtim - s.singleblkrdtim) /
+             nullif((s.phyblkrd - s.singleblkrds), 0),
+             3) as multiblk_avgtim --Multi Block I/O 平均等待时间（cs）
+  from v$filestat s, v$datafile f
+ where s.file# = f.file#;
+ 
+create index index_name on table_name (field1,field2) tablespace tbs_name nologging parallel  2 online [compute statistics];
+alter index index_name noparallel;
+
+
+SQL> SELECT a.sid, a.username, b.xidusn, b.used_urec, b.used_ublk
+ FROM v$session a, v$transaction b
+ WHERE a.saddr = b.ses_addr and a.sid=&sid;                    -->>> Enter the blocking session SID here (&sid:).
+
+
+Usually it is recommended that the database should be in restricted use, no user should be connected as the dropped user. This ensures that the blocking locks do not happen.
+It may be possible to suspend SMON rollback action by setting event 10513
+
+Example:-
+1. oradebug setospid <smonpid>
+SQL> oradebug event 10513 trace name context forever, level 2
+2. <find the process and kill OS process (not just alter system kill)>
+3. you should be able to drop the table now..
+4. Enable smon recovery again.
+SQL> oradebug event 10513 trace name context off
+
+---分区表
+with xs as
+   (select x.*,
+       to_date (substr (high_value, 11, 19), 'YYYY-MM-DD HH24:MI:SS') dates,
+       replace (high_value, 'TIMESTAMP''') datestr
+  from xmltable('/ROWSET/ROW' passing (select dbms_xmlgen.getxmltype('
+select t.table_owner, t.table_name, t.partition_name, t.high_value
+  from dba_tab_partitions t')
+                      from dual) columns
+                   table_owner varchar2(30) path 'TABLE_OWNER',
+                   table_name varchar2(30) path 'TABLE_NAME',
+                   partition_name varchar2(30) path 'PARTITION_NAME',
+                   high_value varchar2(30) path 'HIGH_VALUE') x )
+SELECT 'ALTER TABLE '||TABLE_OWNER||'.'||TABLE_NAME||' DROP PARTITION '||PARTITION_NAME||';' FROM (
+select TO_DATE(xs.datestr,'YYYY-MM-DD HH24:MI:SS') TT,p.* from xs,dba_tab_partitions p
+where xs.table_owner = 'ECM'
+ and p.table_owner = xs.table_owner
+ and p.table_name = xs.table_name
+ AND p.table_name='ECMBUSINESSACTHIST'
+ and p.partition_name = xs.partition_name
+ AND datestr<>'MAXVALUE') WHERE TT<TO_DATE('2017-01-01','YYYY-MM-DD')
+
+
+ ----收集统计信息
+ execute dbms_stats.gather_table_stats(ownname => 'owner',tabname => 'table_name' ,estimate_percent => null ,method_opt => 'for all indexed columns' ,cascade => true);
+
+ ------ogg 重新初始化
+ select DIRECTORY_NAME,DIRECTORY_PATH from DBA_DIRECTORIES;
+select current_scn from v$database;
+expdp system/zaByMcHa DIRECTORY=DATA_PUMP_DIR DUMPFILE=T_SONP_PREFERENCE.dmp LOGFILE=T_SONP_PREFERENCE.log COMPRESSION=all tables=SONP.T_SONP_PREFERENCE FLASHBACK_SCN=97525327146 CLUSTER=N &
+
+impdp system/XkhDBupK DIRECTORY=DATA_PUMP_DIR DUMPFILE=T_SONP_PREFERENCE.dmp LOGFILE=imp.log  CLUSTER=N TABLE_EXISTS_ACTION=replace &
+
+MAP SONP.T_SONP_PREFERENCE, TARGET SONP.T_SONP_PREFERENCE,filter (@GETENV ("transaction", "csn") > 97525327146);
+
+------logfile
+select a.ksppinm name,b.ksppstvl value,a.ksppdesc description
+ from x$ksppi a,x$ksppcv b
+  where a.inst_id = USERENV ('Instance')
+  and b.inst_id = USERENV ('Instance')
+  and a.indx = b.indx
+  and  a.ksppinm='_use_adaptive_log_file_sync';
+
+----sqlprofile
+declare
+v_hints sys.sqlprof_attr;
+sql_txt1 clob;
+sql_txt2 clob;
+begin 
+v_hints:=sys.sqlprof_attr(
+	      'BEGIN_OUTLINE_DATA',
+	      'IGNORE_OPTIM_EMBEDDED_HINTS',
+	      'OPTIMIZER_FEATURES_ENABLE("11.2.0.4")',
+	      'DB_VERSION("11.2.0.4")',
+	      'ALL_ROWS',
+	      'OUTLINE_LEAF(@"SEL$5DA710D3")',
+	      'UNNEST(@"SEL$2")',
+	      'OUTLINE(@"SEL$1")',
+	      'OUTLINE(@"SEL$2")',
+	      'FULL(@"SEL$5DA710D3" "GEO"@"SEL$1")',
+	      'INDEX(@"SEL$5DA710D3" "VINS"@"SEL$2" ("T_VEHICLE_SERVICE"."SERVICEID" "T_VEHICLE_SERVICE"."VID"))',
+	      'LEADING(@"SEL$5DA710D3" "GEO"@"SEL$1" "VINS"@"SEL$2")',
+	      'USE_NL(@"SEL$5DA710D3" "VINS"@"SEL$2")',
+	      'END_OUTLINE_DATA'
+);
+  select sql_text into sql_txt1 from v$sql where sql_id='1czpxmcn61rj2';
+  dbms_sqltune.import_sql_profile(sql_text => sql_txt1,
+  profile => v_hints,name => 'SQLPROFILE_NAME1',
+  replace => TRUE,force_match => TRUE);
+  end;
+  /
+  
+-----------------drop sqlbase line
+SET SERVEROUTPUT ON
+DECLARE
+  v_text  PLS_INTEGER;
+BEGIN
+  v_text := DBMS_SPM.DROP_SQL_PLAN_BASELINE(sql_handle => 'SQL_2096fe3adef92999',plan_name  => 'SQL_PLAN_215ry7bggkact6eefb8b5'); 
+  DBMS_OUTPUT.put_line(v_text);
+END;
+/
+
+
+-----------osw
+java -jar oswbba.jar -i archive -b Jul 26 00:00:00 2017 -e Jul 28 13:30:00 2017 -s 
+
+-----flashback
+SELECT NAME, SCN, TIME,DATABASE_INCARNATION#,GUARANTEE_FLASHBACK_DATABASE,STORAGE_SIZE FROM V$RESTORE_POINT;
+
+alter database flashback off;
+
+CREATE RESTORE POINT ONSTAR_ROLLBACK GUARANTEE FLASHBACK DATABASE;
+
+DROP RESTORE POINT ONSTAR_ROLLBACK;
+
+-----修改db_name
+create pfile
+cluster_database=false
+startup mount
+nid target=sys/qvCOn4oY dbname=p9msp  logfile=/tmp/nidmsp.log
+
+----查看asm文件大小
+select PARENT_INDEX,group_number from V$ASM_ALIAS A where name in ('IDT7GGIS');
+
+col fn format a30
+set linesize 400
+select sum(bytes) / 1024 / 1024 / 1024 g, fn
+  from V$ASM_FILE a,(select fn,file_number from 
+       (SELECT CONNECT_BY_ROOT(name) fn,  file_number, name
+          FROM V$ASM_ALIAS a
+         start with group_number = 1
+                and PARENT_INDEX = 16777216
+        connect by prior reference_index = PARENT_INDEX) group by fn,file_number) b
+ where group_number = 1
+   and a.file_number = b.file_number
+ group by fn
+ order by 1 desc
+ 
+--查看sql执行计划
+ SELECT plan_hash_value,
+         id,
+         LPAD (' ', DEPTH) || operation operation,
+         options,
+         object_owner,
+         object_name,
+         optimizer,
+         cost,
+         access_predicates,
+         filter_predicates
+    FROM sql.sqlplan
+   WHERE sql_id = 'ct0zjxh5uytvx'
+ORDER BY plan_hash_value, id;
+
+---trace dblink
+422455.1
+
+
+
+
+
+
+
+
+     
+     

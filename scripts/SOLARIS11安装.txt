@@ -1,0 +1,66 @@
+先安装sol-11-1111-text-x86
+
+用FTP将sol-11-1111-repo-full.iso传送至服务器
+
+挂接iso介质(仅solaris11)
+# mount -F hsfs -o ro /root/sol-11_1-repo-full.iso /mnt
+
+删除原有发布者
+pkg unset-publisher solaris
+
+替换publisher(发布者)
+# pkg set-publisher -Pe -O file:///mnt/repo solaris
+
+查询包含软件包组
+# pkg list -a *group*
+NAME (PUBLISHER)                                  VERSION                    IFO
+group/feature/amp                                 0.5.11-0.175.0.0.0.2.2576  ---
+group/feature/developer-gnu                       0.5.11-0.175.0.0.0.2.2576  ---
+group/feature/multi-user-desktop                  0.5.11-0.175.0.0.0.2.2576  ---
+group/feature/storage-avs                         0.5.11-0.175.0.0.0.2.1     ---
+group/feature/storage-nas                         0.5.11-0.175.0.0.0.2.1     ---
+group/feature/storage-server                      0.5.11-0.175.0.0.0.2.1     ---
+group/feature/trusted-desktop                     0.5.11-0.175.0.0.0.2.2576  ---
+group/system/solaris-auto-install                 0.5.11-0.175.0.0.0.2.2576  ---
+group/system/solaris-desktop                      0.5.11-0.175.0.0.0.2.2576  ---
+group/system/solaris-large-server                 0.5.11-0.175.0.0.0.2.2576  i--
+group/system/solaris-small-server                 0.5.11-0.175.0.0.0.2.2576  ---
+
+安装并初始explorer
+# pkg install support/explorer
+# /usr/sbin/explorer -g
+
+安装软件包，除group/system/solaris-small-server以外所有的软件包组
+# pkg install group/feature/amp
+# pkg install group/feature/developer-gnu
+。。。
+
+最后重启
+# init 6
+
+
+安装使用一下脚本
+pkg install support/explorer
+pkg install group/feature/amp
+pkg install group/feature/developer-gnu
+pkg install group/feature/multi-user-desktop
+pkg install group/feature/storage-avs
+pkg install group/feature/storage-nas
+pkg install group/feature/storage-server
+pkg install group/feature/trusted-desktop
+pkg install group/system/solaris-auto-install
+pkg install group/system/solaris-desktop
+sleep 20
+init 6
+
+
+##记得调整swap大小##
+zfs list
+
+zfs set volsize=4g rpool1/swap
+swap -a /dev/zvol/dsk/rpool1/swap
+
+swap -l
+vi /etc/vfstab
+uncomment /dev/zvol/dsk/rpool1/swap      -       -       swap    -       no 
+

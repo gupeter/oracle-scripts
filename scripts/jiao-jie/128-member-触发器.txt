@@ -1,0 +1,46 @@
+所有对user_member的操作记录在user_member_log 
+user_member_log 半年可以清除一些数据
+
+create or replace trigger user_member_trg
+after UPDATE or insert or delete of id,pass_word,BANK_CODE ON user_member
+REFERENCING NEW AS new_val OLD AS old_val 
+FOR EACH ROW
+
+DECLARE
+v_info1 int;
+v_info2 varchar2(100);
+v_info3 varchar2(100);
+v_info4 varchar2(100);
+v_info5 varchar2(100);
+
+BEGIN
+  case
+when updating then
+v_info1 :=:new_val.id;
+v_info2 :=:old_val.pass_word;
+v_info3 :=:new_val.pass_word;
+v_info4 :=:old_val.BANK_CODE;
+v_info5 :=:new_val.BANK_CODE;
+
+insert into user_member_log values(v_info1,'update',v_info2,v_info3,v_info4,v_info5,sysdate);
+
+when inserting then
+v_info1 :=:new_val.id;
+v_info2 :=:old_val.pass_word;
+v_info3 :=:new_val.pass_word;
+v_info4 :=:old_val.BANK_CODE;
+v_info5 :=:new_val.BANK_CODE;
+
+  insert into user_member_log values(v_info1,'insert',v_info2,v_info3,v_info4,v_info5,sysdate);
+
+when deleting then
+v_info1 :=:new_val.id;
+v_info2 :=:old_val.pass_word;
+v_info3 :=:new_val.pass_word;
+v_info4 :=:old_val.BANK_CODE;
+v_info5 :=:new_val.BANK_CODE;
+
+   insert into user_member_log values(v_info1,'delete',v_info2,v_info3,v_info4,v_info5,sysdate);
+   end case;
+
+END;

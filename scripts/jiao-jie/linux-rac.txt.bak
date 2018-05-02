@@ -1,0 +1,485 @@
+select userenv('language') from dual;
+
+设置共享内存
+mount -o size=18G  -o noatime,nodiratime -o remount /dev/shm
+
+vi /etc/fstab 
+tmpfs /dev/shm tmpfs defaults,size=1500M 0 0
+
+双网卡
+/etc/sysconfig/network-scrip/
+
+bond0设置：
+DEVICE=bond0
+ONBOOT=yes
+BOOTPROTO=static
+TYPE=Ethernet
+IPADDR=192.168.1.1
+NETWORK=255.255.255.0
+GATEWAY=192.168.1.254
+USERCTL=no
+
+eth0设置：
+DEVICE=eth0
+ONBOOT=yes
+BOOTPROTO=none
+TYPE=Ethernet
+MASTER=bond0
+SLAVE=yes
+USERCTL=no
+
+eth1设置：
+DEVICE=eth1
+ONBOOT=yes
+BOOTPROTO=none
+TYPE=Ethernet
+MASTER=bond0
+SLAVE=yes
+USERCTL=no
+
+/etc/modprobe.conf设置：
+alias bond0 bonding
+options bond0 mode=1 miimon=100
+
+
+/etc/rc.d/rc.local设置
+ifenslave bond0 eth0 eth1
+
+网卡添加
+HOTPLUG="no"
+-----------------------------------------
+yum
+------------------------------------------
+cd /etc/yum.repos.d/
+
+cat>> /etc/yum.repos.d/oracle.repo<<EOF
+[oracle]
+name=oracle
+baseurl=file:///mnt/Server
+enable=1
+gpgcheck=0
+EOF
+
+yum update
+
+rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+
+oel6：
+rpm --import /etc/pki/rpm-gpg/RPM*
+
+yum install binutils-* elfutils-libelf-* compat-* gcc-* glibc-* pdksh-* libgcc-* libstdc++-* \
+libaio-* make-* sysstat-* unixODBC-*
+
+-----------------------------------------------
+shell
+
+#!/bin/sh
+cat >> pc << EOF
+rpm -q binutils-2.17.50.0.6-14.el5 \
+compat-libstdc++-33-3.2.3-61.x86_64 compat-libstdc++-33-3.2.3-61.i386 \
+elfutils-libelf  elfutils-libelf-devel  gcc-4.1.2-48.el5 gcc-c++-4.1.2-48.el5 \
+glibc-2.5-49.i686 glibc-2.5-49.x86_64 glibc-common-2.5-49 glibc-devel-2.5-49.i386 \
+glibc-devel-2.5-49.x86_64 glibc-headers-2.5-49 ksh-20100202-1.el5 libaio-0.3.106-5.i386 \
+libaio-0.3.106-5.x86_64 libaio-devel-0.3.106-5.i386 libaio-devel-0.3.106-5.x86_64 \
+libgcc-4.1.2-48.el5.i386 libgcc-4.1.2-48.el5.x86_64 libstdc++-4.1.2-48.el5.i386 \
+libstdc++-4.1.2-48.el5.i386 libstdc++-devel-4.1.2-48.el5 make-3.81-3.el5 \
+numactl-devel-0.9.8-11.el5 sysstat-7.0.2-3.el5 unixODBC-2.2.11-7.1.i386 \
+unixODBC-2.2.11-7.1.x86_64 unixODBC-devel-2.2.11-7.1.i386 unixODBC-devel-2.2.11-7.1.x86_64
+EOF
+
+chmod u+x pc
+./pc > pc1
+
+cat pc1 |grep "is not installed" |cut -d' ' -f 2 > pc2
+for i in `cat pc2`
+do
+yes|yum install $i
+done
+
+
+----------------------------------------oracle
+
+
+不使用ntp
+[root@node2 ~]# service ntpd stop  
+Shutting down ntpd:                                        [FAILED]  
+[root@node2 ~]# chkconfig ntpd off  
+[root@node2 ~]# mv /etc/ntp.conf /etc/ntp.conf.original  
+[root@node2 ~]# rm -rf /var/run/ntpd.pid
+
+
+使用ntp
+服务端：
+mv /etc/ntp.conf /etc/ntp.conf.original 
+vi /etc/ntp.conf
+restrict default kod nomodify notrap nopeer noquery  
+restrict -6 default kod nomodify notrap nopeer noquery  
+restrict 127.0.0.1   
+restrict -6 ::1  
+
+server  127.127.1.0     #local clock  
+  
+fudge   127.127.1.0 stratum 10  
+driftfile /var/lib/ntp/drift  
+keys /etc/ntp/keys 
+
+/etc/sysconfig/ntpd
+OPTIONS="-x -u ntp:ntp -p /var/run/ntpd.pid -g"
+
+chkconfig ntpd on
+
+客户端：
+mv /etc/ntp.conf /etc/ntp.conf.original 
+vi /etc/ntp.conf
+server 192.168.0.2
+driftfile /var/lib/ntp/drift
+broadcastdelay  0.008
+keys /etc/ntp/keys
+
+/etc/sysconfig/ntpd
+OPTIONS="-x -u ntp:ntp -p /var/run/ntpd.pid -g"
+
+cat /etc/hosts
+10.109.12.66 gjxc-data-yysj02
+10.109.12.65 gjxc-data-yysj01
+
+10.109.12.70 gjxc-data-yysj01-vip
+10.109.12.71 gjxc-data-yysj02-vip
+
+100.0.0.1 gjxc-data-yysj01-priv
+100.0.0.2 gjxc-data-yysj02-priv
+
+10.109.12.72 scan-ip
+
+cat >> /etc/udev/rules.d/60-raw.rules <<EOF
+ACTION=="add", KERNEL=="sdb",RUN+="/bin/raw /dev/raw/raw1 %N"
+ACTION=="add", KERNEL=="sdc",RUN+="/bin/raw /dev/raw/raw2 %N"
+ACTION=="add", KERNEL=="raw[1-2]", OWNER="grid", GROUP="asmadmin", MODE="0660"
+EOF
+
+
+groupadd -g 501 oinstall
+groupadd -g 502 dba
+groupadd -g 503 oper
+groupadd -g 504 asmadmin
+groupadd -g 506 asmdba
+groupadd -g 507 asmoper
+useradd -u 501 -g oinstall -G asmadmin,asmdba,asmoper grid
+useradd -u 502 -g oinstall -G dba,asmdba,oper oracle
+
+
+
+passwd grid
+passwd oracle
+
+mkdir -p /u01/app/11.2.0/grid
+mkdir -p /u01/app/grid 
+chown -R grid:oinstall /u01
+mkdir -p /u01/app/oracle 
+chown -R oracle:oinstall /u01/app/oracle
+chmod -R 775 /u01/
+
+
+gird用户
+
+
+
+
+export ORACLE_SID=+ASM1
+export ORACLE_BASE=/u01/app/grid
+export ORACLE_HOME=/u01/app/11.2.0/grid
+export PATH=$ORACLE_HOME/bin:$PATH
+
+oracle用户
+export ORACLE_SID=peter1
+export ORACLE_BASE=/u01/app/oracle
+export ORACLE_HOME=$ORACLE_BASE/product/11.2.0/db_1
+export PATH=$ORACLE_HOME/bin:$PATH
+
+export ORACLE_SID=peter2
+export ORACLE_BASE=/u01/app/oracle
+export ORACLE_HOME=$ORACLE_BASE/product/11.2.0/db_1
+export PATH=$ORACLE_HOME/bin:$PATH
+
+cat >> /etc/sysctl.conf <<EOF
+fs.aio-max-nr = 1048576
+fs.file-max = 6815744
+# kernel.shmall = 2097152 
+# kernel.shmmax = 1572864000
+kernel.shmmni = 4096
+kernel.sem = 250 32000 100 128
+net.ipv4.ip_local_port_range = 9000 65500
+net.core.rmem_default = 262144
+net.core.rmem_max = 4194304
+net.core.wmem_default = 262144
+net.core.wmem_max = 1048586 
+EOF
+
+
+cat >> /etc/security/limits.conf <<EOF
+oracle soft nproc 2047
+oracle hard nproc 16384
+oracle soft nofile 1024
+oracle hard nofile 65536
+oracle soft stack 32768 
+grid soft nproc 2047
+grid hard nproc 16384
+grid soft nofile 1024
+grid hard nofile 65536
+grid soft stack 32768 
+EOF
+
+
+cat >> /etc/pam.d/login <<EOF
+session    required     pam_limits.so
+EOF
+
+cat >> /etc/profile <<EOF
+if [ $USER = "oracle" ] || [ $USER = "grid" ];then
+if [ $SHELL = "/bin/ksh" ];then
+ulimit -p 16384
+ulimit -n 65536
+else
+ulimit -u 16384 -n 65536
+fi
+umask 022
+fi
+EOF
+
+
+cat >> /etc/csh.login <<EOF
+if [ $USER = "oracle" ] || [ $USER = "grid" ];thenvi 
+        limit maxproc 16384
+        limit descriptors 65536
+endif
+EOF
+
+
+
+./sshUserSetup.sh -user grid -hosts "rac1 rac2" -advanced -noPromptPassphrase
+
+-----------------------------
+6.1
+#!/bin/sh
+cat >> pc << EOF
+rpm -q binutils-2.20.51.0.2-5.20.el6.x86_64 \
+compat-libcap1-1.10-1.x86_64 \
+compat-libstdc++-33-3.2.3-69.el6.x86_64 \
+compat-libstdc++-33-3.2.3-69.el6.i686 \
+gcc-4.4.5-6.el6.x86_64 \
+gcc-c++-4.4.5-6.el6.x86_64 \
+glibc-2.12-1.25.el6.i686 \
+glibc-2.12-1.25.el6.x86_64 \
+glibc-devel-2.12-1.25.el6.i686 \
+ksh-20100621-6.el6.x86_64 \
+libgcc-4.4.5-6.el6.i686 \
+libgcc-4.4.5-6.el6.x86_64 \
+libstdc++-4.4.5-6.el6.i686 \
+libstdc++-4.4.5-6.el6.x86_64 \
+libstdc++-devel-4.4.5-6.el6.x86_64 \
+libstdc++-devel-4.4.5-6.el6.i686 \
+libaio-0.3.107-10.el6.i686 \
+libaio-0.3.107-10.el6.x86_64 \
+libaio-devel-0.3.107-10.el6.i686 \
+libaio-devel-0.3.107-10.el6.x86_64 \
+make-3.81-19.el6.x86_64 \
+sysstat-9.0.4-18.el6.x86_64 \
+unixODBC-2.2.14-11.el6.i686 \
+unixODBC-2.2.14-11.el6.x86_64 \
+unixODBC-devel-2.2.14-11.el6.i686 \
+unixODBC-devel-2.2.14-11.el6.x86_64
+EOF
+
+chmod u+x pc
+./pc > pc1
+
+cat pc1 |grep "is not installed" |cut -d' ' -f 2 > pc2
+for i in `cat pc2`
+do
+yes|yum install $i
+done
+
+网卡绑定oel6
+
+bond0设置：
+DEVICE=bond0
+ONBOOT=yes
+BOOTPROTO=static
+TYPE=Ethernet
+IPADDR=192.168.1.1
+NETWORK=255.255.255.0
+GATEWAY=192.168.1.254
+USERCTL=no
+bonding_opts="mode=1 miimon=100 primary=eth0" -----只针对链路切换，交换机不接换
+bonding_opts="mode=1 arp_interval=1000 arp_ip_target=192.168.1.1 ------网关进行探测
+
+eth0设置：
+DEVICE=eth0
+ONBOOT=yes
+BOOTPROTO=none
+TYPE=Ethernet
+MASTER=bond0
+SLAVE=yes
+USERCTL=no
+
+eth1设置：
+DEVICE=eth1
+ONBOOT=yes
+BOOTPROTO=none
+TYPE=Ethernet
+MASTER=bond0
+SLAVE=yes
+USERCTL=no
+
+/etc/modprobe.d/bonding.conf设置：
+alias bond0 bonding
+
+查看情况
+cat /proc/net/bonding/bond0
+
+修改ulimit -u
+vi /etc/security/limits.d/90-nproc.conf
+
+redhat linux6 root报错
+17.9.1.?检查操作系统中?libcap.so?是否已安装?
+如果是?64?位系统，i686?和?x86_64?都要安装。?
+#?yum?install?-y?libcap*.i686?
+#?yum?install?-y?libcap*.x86_64
+
+ln -s /lib64/libcap.so.2.16 /lib64/libcap.so.1
+
+私网反向过滤
+/etc/sysctl.conf
+net.ipv4.conf.eth2.rp_filter = 2
+net.ipv4.conf.eth3.rp_filter = 2
+net.ipv4.conf.all.rp_filter = 1
+
+
+
+选取你的一个目录
+cd /var/
+创建48g的文件块：
+dd if=/dev/zero of=swapfile bs=1M count=49152
+创建swap文件
+/sbin/mkswap swapfile
+激活swap文件
+/sbin/swapon swapfile
+查看一下swap是否正确：
+/sbin/swapon -s
+加到fstab文件中让系统引导时自动启动
+vi /etc/fstab
+在末尾增加以下内容：
+/var/swapfile swap swap defaults 0 0
+
+./runInstaller -record -destinationFile /u01/enterprise01.rsp
+
+//emc多路径
+for i in b c d;
+do
+echo "KERNEL==\"emcpower$i\", SUBSYSTEM=="block", PROGRAM==\"/sbin/scsi_id --whitelisted --replace-whitespace --device=/dev/\$name\", RESULT==\"`/sbin/scsi_id --whitelisted --replace-whitespace --device=/dev/emcpower$i`\", NAME=\"asm-disk$i\", OWNER=\"grid\", GROUP=\"asmadmin\", MODE=\"0660\"">> /etc/udev/rules.d/99-oracle-asmdevices.rules
+done
+
+//一般
+for i in b c d;
+do
+echo "KERNEL==\"sd*\", BUS==\"scsi\", PROGRAM==\"/sbin/scsi_id --whitelisted --replace-whitespace --device=/dev/\$name\", RESULT==\"`/sbin/scsi_id --whitelisted --replace-whitespace --device=/dev/sd$i`\", NAME=\"asm-disk$i\", OWNER=\"grid\", GROUP=\"asmadmin\", MODE=\"0660\""      >> /etc/udev/rules.d/99-oracle-asmdevices.rules
+done
+
+一般子分区
+for i in b1 b2;
+do
+echo "KERNEL==\"sd$i\", BUS==\"scsi\", PROGRAM=="/sbin/scsi_id -g -u -d /dev/\$parent", RESULT==\"`/sbin/scsi_id --whitelisted --replace-whitespace --device=/dev/sd$i`\", NAME=\"asm-disk$i\", OWNER=\"grid\", GROUP=\"asmadmin\", MODE=\"0660\""      >> /etc/udev/rules.d/99-oracle-asmdevices.rules
+done
+
+多路径配置权限
+vi /etc/udev/rules.d/99-asm.rules
+KERNEL=="dm-*", OWNER="grid", GROUP="asmadmin", MODE="0660"
+
+查看裸设备块数*521
+blockdev --getsize /dev/raw/raw1
+
+./sshUserSetup.sh -user oracle -hosts "haddb1 haddb2" -advanced -noPromptPassphrase
+
+时间手工同步
+cluvfy comp clocksync -n all -verbose
+=================asm
+select state,header_status,substr(name,1,12) Name,TOTAL_MB,free_mb,substr(path,1,16) PATH from v$asm_disk;
+
+select * from v$asm_operation;
+
+ALTER DISKGROUP DATA ADD DISK '/dev/asm-diskc';
+
+select name, total_mb, free_mb from v$asm_disk_stat;
+
+alter diskgroup data drop disk DATA_0000;
+
+=====tablespace
+
+CREATE TABLESPACE ts01 DATAFILE '/data1/data_ts01_1.dbf' SIZE 512M AUTOEXTEND ON NEXT 256M MAXSIZE UNLIMITED;
+
+ALTER TABLESPACE app_data ADD DATAFILE 'D:\ORACLE\PRODUCT\10.2.0\ORADATA\EDWTEST\APP03.DBF' SIZE 50M;
+
+create temporary tablespace  TEMP2 TEMPFILE '/home2/oracle/oradata/sysmon/temp02.dbf' SIZE 512M REUSE AUTOEXTEND ON NEXT  640K MAXSIZE UNLIMITED;
+
+CREATE USER LNCKQ IDENTIFIED BY LNCKQ DEFAULT TABLESPACE GTOA TEMPORARY TABLESPACE TEMP
+
+=================日志
+alter database add logfile member 'D:\ORACLE\ORADATA\JOSEPH\log01.LOG' to group 1
+alter database add logfile thread 2 group 12 ('+data') size 512m;
+
+10.9.220.205
+
+============加密
+配置：
+在服务端的sqlnet.ora：
+SQLNET.CRYPTO_CHECKSUM_SERVER = REQUIRED 
+SQLNET.ENCRYPTION_SERVER = REQUIRED 
+SQLNET.CRYPTO_CHECKSUM_TYPES_SERVER = (MD5) 
+SQLNET.ENCRYPTION_TYPES_SERVER = (DES40,RC4_40) 
+SQLNET.CRYPTO_SEED = "abcdefghijklmnopqrstuvwxyz"
+
+1. Accepted encrypt（接受加密）
+在客户端的sqlnet.ora
+SQLNET.CRYPTO_CHECKSUM_CLIENT = ACCEPTED 
+SQLNET.ENCRYPTION_CLIENT = ACCEPTED 
+SQLNET.CRYPTO_CHECKSUM_TYPES_CLIENT = (MD5) 
+SQLNET.ENCRYPTION_TYPES_CLIENT = (DES40,RC4_40) 
+SQLNET.CRYPTO_SEED = "abcdefghijklmnopqrstuvwxyz"
+
+jdbc
+Properties props = new Properties();
+props.put("ORACLE.NET.ENCRYPTION_CLIENT", "REJECTED");
+props.put("ORACLE.NET.ENCRYPTION_TYPES_CLIENT", "( RC4_40 )");
+props.put("ORACLE.NET.CRYPTO_CHECKSUM_CLIENT", "REJECTED");
+props.put("ORACLE.NET.CRYPTO_CHECKSUM_TYPES_CLIENT", "( MD5 )");
+props.put("ORACLE.NET.CRYPTO_SEED_CLIENT", "abcdefghijklmnopqrstuvwxyz");
+OracleDataSource ds = new OracleDataSource();
+ods.setConnectionProperties(props);
+
+
+
+查看隐含参数
+select a.ksppinm name,b.ksppstvl value,a.ksppdesc description
+from x$ksppi a,x$ksppcv b
+where a.inst_id = USERENV ('Instance')
+and b.inst_id = USERENV ('Instance')
+and a.indx = b.indx
+and a.ksppinm in ('_backup_seq_bufsz','_backup_seq_bufcnt','_backup_disk_bufsz','_backup_disk_bufcnt','_backup_file_bufsz','_backup_file_bufcnt')
+order by name;
+
+查看rman
+COL in_sec FORMAT a10
+COL out_sec FORMAT a10
+COL TIME_TAKEN_DISPLAY FORMAT a10
+col STATUS format a9
+col hrs format 999.99
+select
+SESSION_KEY, INPUT_TYPE, STATUS,
+to_char(START_TIME,'mm/dd/yy hh24:mi') start_time,
+to_char(END_TIME,'mm/dd/yy hh24:mi')   end_time,
+elapsed_seconds,
+INPUT_BYTES_PER_SEC_DISPLAY in_sec,
+OUTPUT_BYTES_PER_SEC_DISPLAY out_sec,
+TIME_TAKEN_DISPLAY
+from V$RMAN_BACKUP_JOB_DETAILS
+order by session_key;

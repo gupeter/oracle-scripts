@@ -1,0 +1,75 @@
+set serveroutput on size 1000000 
+set feedback off 
+prompt Input segment name, owner (default current user), type (default table), partition name (default null) 
+DECLARE 
+p_segname varchar2(500); 
+p_owner varchar2(100); 
+p_type varchar2(100); 
+p_partition varchar2(500); 
+l_free_blks number; 
+l_total_blocks number; 
+l_total_bytes number; 
+l_unused_blocks number; 
+l_unused_bytes number; 
+l_lastUsedExtFileId number; 
+l_lastUsedExtBlockId number; 
+l_last_used_block number; 
+l_segment_space_mgmt varchar2(255); 
+l_unformatted_blocks number; 
+l_unformatted_bytes number; 
+l_fs1_blocks number; 
+l_fs1_bytes number; 
+l_fs2_blocks number; 
+l_fs2_bytes number; 
+l_fs3_blocks number; 
+l_fs3_bytes number; 
+l_fs4_blocks number; 
+l_fs4_bytes number; 
+l_full_blocks number; 
+l_full_bytes number; 
+procedure p(p_label in varchar2,p_num in number) 
+as 
+begin 
+dbms_output.put_line(rpad(p_label,40,'.')||to_char(p_num,'999,999,999,999')); 
+end; 
+
+begin
+
+dbms_space.space_usage('IDBADM_USER','T_GTBT_USAGE_TRACKING','TABLE', 
+l_unformatted_blocks, 
+l_unformatted_bytes, 
+l_fs1_blocks,l_fs1_bytes, 
+l_fs2_blocks,l_fs2_bytes, 
+l_fs3_blocks,l_fs3_bytes, 
+l_fs4_blocks,l_fs4_bytes, 
+l_full_blocks,l_full_bytes,p_partition); 
+
+p('Unformatted Block ',l_unformatted_blocks); 
+p('FS1 Blocks (0-25) ',l_fs1_blocks); 
+p('FS2 Blocks (25-50) ',l_fs2_blocks); 
+p('FS3 Blocks (50-75) ',l_fs3_blocks); 
+p('FS4 Blocks (75-100) ',l_fs4_blocks); 
+p('Full Blocks ',l_full_blocks); 
+
+
+dbms_space.unused_space(segment_owner=>'IDBADM_USER', 
+segment_name=>'T_GTBT_USAGE_TRACKING', 
+segment_type=>'TABLE', 
+total_blocks=>l_total_blocks, 
+total_bytes=>l_total_bytes, 
+unused_blocks=>l_unused_blocks, 
+unused_bytes=>l_unused_bytes, 
+last_used_extent_file_id=>l_lastUsedExtFileId, 
+last_used_extent_block_id=>l_lastUsedExtBlockId, 
+last_used_block=>l_last_used_block, 
+partition_name=>p_partition); 
+p('Total Blocks',l_total_blocks); 
+p('Total Bytes',l_total_bytes); 
+p('Total MBytes',trunc(l_total_bytes/1024/1024)); 
+p('Unused Blocks',l_unused_blocks); 
+p('Unused Bytes',l_unused_bytes); 
+p('Last Used Ext FileId',l_lastUsedExtFileId); 
+p('Last Used Ext BlockId',l_lastUsedExtBlockId); 
+p('Last Used Block',l_last_used_block); 
+ END; -- Procedure 
+ / 

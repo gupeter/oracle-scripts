@@ -1,0 +1,58 @@
+第一步:创建目录和赋权限
+
+--********************************************************************* 
+--*** 
+--***首先以dba或者是其他具有create directory的用户创建directory，然后授权 
+--*** 
+--********************************************************************* 
+CREATE OR REPLACE DIRECTORY dir_export AS 'd:/oracle'; 
+GRANT read,write ON directory dir_export TO scott;
+
+ 
+
+第二步:建立导出存储过程:
+
+--********************************************************************* 
+--*** 
+--***执行导出文本文件的存储过程：p_exp 
+--***p_tname:要导出的表明；p_query：where条件，根据这个条件导出，如果为null,则全表导出 
+--*** 
+--*** 
+--*********************************************************************
+
+create or replace procedure p_exp(p_tname varchar2)
+as
+  v_line  varchar2(2000);                      --记录的数据
+  v_sql    varchar2(2000);                      --动态sql变量
+  v_fname  varchar2(40);                        --导出数据的文件名字
+  cursor cursor_column                          --游标：通过数据字典查找出表有哪些字段
+        is select column_name,data_type
+        from user_tab_columns where table_name=upper(p_tname);   --获取表字段
+  type type_cursor is ref cursor ;
+  mycursor type_cursor;        
+  outf utl_file.file_type;     --导出文件类型
+
+begin
+  v_fname:=p_tname||'.csv';    --导出的文件名和类型
+  for col in cursor_column loop
+  --判断字段类型,生成对应的数据格式
+    if col.data_type='DATE' then
+          v_sql:=v_sql||'to_char('||col.column_name||',''yyyy-mm-dd-hh24:mi:ss'')'||''',''';
+    else
+          v_sql:=v_sql||col.column_name||'||'',''||';
+    end if;
+  end loop;
+  v_sql:=rtrim(v_sql,'||'',''||'); --把拼接字段最后的拼接字符去除
+  v_sql:='select '||v_sql||' from '||p_tname;
+  dbms_output.put_line(v_sql);
+  outf:=utl_file.fopen('DIR_EXPORT',v_fname,'w'); --打开文件夹,创建文件
+  open mycursor for v_sql;
+  loop
+    fetch mycursor into v_line;
+    exit when mycursor%notfound;
+    --dbms_output.put_line(v_line); --控制台打印每条记录
+    utl_file.put_line(outf,v_line);  --将每条记录写入文件
+  end loop;
+  utl_file.fclose(outf);   --关闭文件读写流
+  dbms_output.put_line('导出成功');
+end;

@@ -1,0 +1,45 @@
+±ä¸üÄ¿Â¼»Ö¸´
+report schema;
+
+File Size(MB) Tablespace           RB segs Datafile Name
+---- -------- -------------------- ------- ------------------------
+1    0        SYSTEM               ***     /u01/app/oracle/oradata/NEWDP/system01.dbf
+2    0        UNDOTBS1             ***     /u01/app/oracle/oradata/NEWDP/undotbs01.dbf
+3    0        SYSAUX               ***     /u01/app/oracle/oradata/NEWDP/sysaux01.dbf
+4    0        USERS                ***     /u01/app/oracle/oradata/NEWDP/users01.dbf
+5    0        LOTTERY              ***     /data/oradata/sysdata/lottery01.dbf
+6    0        LOTTERY              ***     /data/oradata/sysdata/lottery02.dbf
+7    0        LOTTERY_INDEX        ***     /data/oradata/sysdata/lottery_index01.dbf
+
+List of Temporary Files
+=======================
+File Size(MB) Tablespace           Maxsize(MB) Tempfile Name
+---- -------- -------------------- ----------- --------------------
+1    0        TEMP                 32767       /u01/app/oracle/oradata/NEWDP/temp01.dbf
+
+restore spfile from 
+restore controlfile from 
+
+run {
+set newname for datafile 1 to '/data3/dg/system01.dbf';
+set newname for datafile 2 to '/data3/dg/undotbs1.dbf';
+set newname for datafile 3 to '/data3/dg/sysaux.dbf';
+set newname for datafile 4 to '/data3/dg/users';
+set newname for datafile 5 to '/data3/dg/lottery1.dbf';
+set newname for datafile 6 to '/data3/dg/lottery2.dbf';
+set newname for datafile 7 to '/data3/dg/lottery_index01.dbf';
+set newname for TEMPFILE 1 to '/data3/dg/temp1';
+restore database;
+switch datafile all;
+}
+
+restore archivelog from logseq
+
+recover database;
+
+alter database rename file '/u01/app/oracle/oradata/NEWDP/redo01.log' to '/data3/dg/redo1';
+ alter database rename file '/u01/app/oracle/oradata/NEWDP/redo02.log' to '/data3/dg/redo2';
+alter database rename file '/u01/app/oracle/oradata/NEWDP/redo03.log' to '/data3/dg/redo3';
+
+alter database rename file '/u01/app/oracle/oradata/NEWDP/temp01.dbf' to '/data3/dg/temp';
+alter database open resetlogs;

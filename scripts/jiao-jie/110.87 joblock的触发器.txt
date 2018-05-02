@@ -1,0 +1,21 @@
+110.87 joblockµÄ´¥·¢Æ÷
+USE [zs_LotBill_87]
+GO
+/****** Object:  Trigger [dbo].[joblock_tr]    Script Date: 11/28/2016 17:20:53 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER trigger [dbo].[joblock_tr]
+on [dbo].[JobLock] 
+instead of update 
+as 
+if UPDATE(status)
+begin
+set NOCOUNT ON
+update joblock set joblock.name=INSERTED.name ,
+joblock.code=INSERTED.code,joblock.user_name=INSERTED.user_name,
+joblock.create_time=INSERTED.create_time,
+joblock.status=(case when INSERTED.status=1 then 0 else INSERTED.status end)
+from INSERTED where joblock.id=INSERTED.id
+end

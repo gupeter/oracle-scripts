@@ -1,0 +1,83 @@
+rac 启动
+--默认会随机启动
+
+手动启动
+节点一：
+root下
+/u01/app/11.2.0/grid/bin/crsctl start crs
+节点二：
+root下
+/u01/app/11.2.0/grid/bin/crsctl start crs
+
+手动停止
+节点一：
+root下
+/u01/app/11.2.0/grid/bin/crsctl stop crs -f
+节点二：
+root下
+/u01/app/11.2.0/grid/bin/crsctl stop crs -f
+
+查看rac日志
+节点一
+/u01/app/11.2.0/grid/log/ndp-rac1/alertndp-rac1.log
+节点二
+/u01/app/11.2.0/grid/log/ndp-rac2/alertndp-rac2.log
+
+
+查看rac运行状态
+grid下
+crsctl stat res -t (除了ora.gsd是offline，其他的必须是online)
+如果不是需要手动启动srvctl start -h查看相关命令
+--------------------------------------------------------------------------------
+NAME           TARGET  STATE        SERVER                   STATE_DETAILS       
+--------------------------------------------------------------------------------
+Local Resources
+--------------------------------------------------------------------------------
+ora.ARCH.dg
+               ONLINE  ONLINE       ndp-rac1                                     
+               ONLINE  ONLINE       ndp-rac2                                     
+ora.DATA.dg
+               ONLINE  ONLINE       ndp-rac1                                     
+               ONLINE  ONLINE       ndp-rac2                                     
+ora.LISTENER.lsnr
+               ONLINE  ONLINE       ndp-rac1                                     
+               ONLINE  ONLINE       ndp-rac2                                     
+ora.OCR.dg
+               ONLINE  ONLINE       ndp-rac1                                     
+               ONLINE  ONLINE       ndp-rac2                                     
+ora.SYSTEM.dg
+               ONLINE  ONLINE       ndp-rac1                                     
+               ONLINE  ONLINE       ndp-rac2                                     
+ora.asm
+               ONLINE  ONLINE       ndp-rac1                 Started             
+               ONLINE  ONLINE       ndp-rac2                 Started             
+ora.gsd
+               OFFLINE OFFLINE      ndp-rac1                                     
+               OFFLINE OFFLINE      ndp-rac2                                     
+ora.net1.network
+               ONLINE  ONLINE       ndp-rac1                                     
+               ONLINE  ONLINE       ndp-rac2                                     
+ora.ons
+               ONLINE  ONLINE       ndp-rac1                                     
+               ONLINE  ONLINE       ndp-rac2                                     
+ora.registry.acfs
+               ONLINE  ONLINE       ndp-rac1                                     
+               ONLINE  ONLINE       ndp-rac2                                     
+--------------------------------------------------------------------------------
+Cluster Resources
+--------------------------------------------------------------------------------
+ora.LISTENER_SCAN1.lsnr
+      1        ONLINE  ONLINE       ndp-rac2                                     
+ora.cvu
+      1        ONLINE  ONLINE       ndp-rac2                                     
+ora.ndp-rac1.vip
+      1        ONLINE  ONLINE       ndp-rac1                                     
+ora.ndp-rac2.vip
+      1        ONLINE  ONLINE       ndp-rac2                                     
+ora.oc4j
+      1        ONLINE  ONLINE       ndp-rac2                                     
+ora.rac.db
+      1        ONLINE  ONLINE       ndp-rac1                 Open                
+      2        ONLINE  ONLINE       ndp-rac2                 Open                
+ora.scan1.vip
+      1        ONLINE  ONLINE       ndp-rac2                                     

@@ -1,0 +1,45 @@
+                                   
+--批量更新除    print_state 字段的其他字段                                           
+merge into ticket a
+using MAC_LOTBILLREC b
+on (a.rec_id=b.ticket_id and a.RECV_DATETIME >=to_date('2016-11-20','yyyy-mm-dd') and a.PRINT_STATE=1)
+when matched then update set
+b.print_datetime        =a.BILL_TIME 
+--,b.print_state           =4
+,b.machine_no           =a.MACHINE_NO
+,b.TICKET_SERIAL_NO     =a.BILL_ORDER
+,b.TICKET_PASSWD        =a.BILL_NUM_KEY
+b.TICKET_SECURITY_CODE  =a.BILL_STR_KEY
+,b.PRINT_CITY_CODE      =a.CITY_CODE
+,b.odds                 =a.BILL_CHIP_BON
+
+--再更新print_state字段
+update ticket a set print_state=4 where a.RECV_DATETIME >=to_date('2016-11-20','yyyy-mm-dd') and a.PRINT_STATE=1
+
+--更新订单表
+update order_group set status=2 where status=1 and create_time >=to_date('2016-11-20','yyyy-mm-dd')
+
+--回补票面信息
+grep -E '彩机返回的信息:'  event.2016-11-20_13.log>/tmp/2016-11-20_13.log
+sed -i 's/\[/|/g;s/\]/|/g;s/$/&09/g' /tmp/2016-11-20_13.log --09代表时间段可以自己换
+awk -F '|' '{print $4 "|" $6 "|" $7 "|" $8}' /tmp/2016-11-20_13.log>13.dat
+
+数据库中建表
+create table temp_NEW_TICKETBASe1 (recid varchar2(400),tedata clob,remark varchar2(40),t varchar2(10))
+
+--加载数据
+数据库服务器端编写ee.ctl 文件
+
+load data
+infile '/home/oracle/13.dat'
+APPEND INTO TABLE TEMP_NEW_TICKETBASE1 
+fields terminated by '|'
+(recid char(400),
+tedata char(20000),
+remark char(40),
+t char(10))
+
+将13.dat传至数据库服务器端 /home/oracle 目录下
+sqlldr userid=lottery/'ltx1378$#5'@xbrac2 control=ee.ctl log=13.log
+
+查看日志是否都已经插入数据库中

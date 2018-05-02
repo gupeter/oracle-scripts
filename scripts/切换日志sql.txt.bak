@@ -1,0 +1,81 @@
+set linesize 400
+set pagesize 999
+column dt format  a10  
+column dy format a7  
+column Total format 999  
+column h0  format 99  
+column h1  format 99  
+column h2  format 99  
+column h3  format 99  
+column h4  format 99  
+column h5  format 99  
+column h6  format 99  
+column h7  format 99  
+column h8  format 99  
+column h9  format 99  
+column h10  format 99  
+column h11  format 99  
+column h12  format 99  
+column h13  format 99  
+column h14  format 99  
+column h15  format 99  
+column h16  format 99  
+column h17  format 99  
+column h18  format 99  
+column h19  format 99  
+column h20  format 99  
+column h21  format 99  
+column h22  format 99  
+column h23  format 99  
+  
+SELECT  to_char(first_time,'yyyy-mm-dd') Dt,  
+        to_char(first_time, 'Dy') dy,  
+        count(1) "Total",  
+        SUM(decode(to_char(first_time, 'hh24'),'00',1,0)) "h0",  
+        SUM(decode(to_char(first_time, 'hh24'),'01',1,0)) "h1",  
+        SUM(decode(to_char(first_time, 'hh24'),'02',1,0)) "h2",  
+        SUM(decode(to_char(first_time, 'hh24'),'03',1,0)) "h3",  
+        SUM(decode(to_char(first_time, 'hh24'),'04',1,0)) "h4",  
+        SUM(decode(to_char(first_time, 'hh24'),'05',1,0)) "h5",  
+        SUM(decode(to_char(first_time, 'hh24'),'06',1,0)) "h6",  
+        SUM(decode(to_char(first_time, 'hh24'),'07',1,0)) "h7",  
+        SUM(decode(to_char(first_time, 'hh24'),'08',1,0)) "h8",  
+        SUM(decode(to_char(first_time, 'hh24'),'09',1,0)) "h9",  
+        SUM(decode(to_char(first_time, 'hh24'),'10',1,0)) "h10",  
+        SUM(decode(to_char(first_time, 'hh24'),'11',1,0)) "h11",  
+        SUM(decode(to_char(first_time, 'hh24'),'12',1,0)) "h12",  
+        SUM(decode(to_char(first_time, 'hh24'),'13',1,0)) "h13",  
+        SUM(decode(to_char(first_time, 'hh24'),'14',1,0)) "h14",  
+        SUM(decode(to_char(first_time, 'hh24'),'15',1,0)) "h15",  
+        SUM(decode(to_char(first_time, 'hh24'),'16',1,0)) "h16",  
+        SUM(decode(to_char(first_time, 'hh24'),'17',1,0)) "h17",  
+        SUM(decode(to_char(first_time, 'hh24'),'18',1,0)) "h18",  
+        SUM(decode(to_char(first_time, 'hh24'),'19',1,0)) "h19",  
+        SUM(decode(to_char(first_time, 'hh24'),'20',1,0)) "h20",  
+        SUM(decode(to_char(first_time, 'hh24'),'21',1,0)) "h21",  
+        SUM(decode(to_char(first_time, 'hh24'),'22',1,0)) "h22",  
+        SUM(decode(to_char(first_time, 'hh24'),'23',1,0)) "h23"  
+FROM    V$log_history  
+group by to_char(first_time,'yyyy-mm-dd') ,  
+        to_char(first_time, 'Dy')  
+Order by 1; 
+
+
+
+SELECT  to_char(first_time,'yyyy-mm-dd') Dt,  
+        to_char(first_time, 'Dy') dy,  
+        count(1) "Total" FROM    V$log_history  
+group by to_char(first_time,'yyyy-mm-dd') ,  
+        to_char(first_time, 'Dy')  
+Order by 1; 
+
+=======================
+查看表空间增长情况
+======================
+select a.name,b.* from v$tablespace a,
+(select tablespace_id,trunc(to_date(rtime,'mm/dd/yyyy hh24:mi:ss'))datetime,max(tablespace_usedsize*8/1024) used_size from 
+dba_hist_tbspc_space_usage where trunc(to_date(rtime,'mm/dd/yyyy hh24:mi:ss'))>trunc(sysdate-30)  group by tablespace_id, 
+trunc(to_date(rtime,'mm/dd/yyyy hh24:mi:ss')) order by tablespace_id,trunc(to_date(rtime,'mm/dd/yyyy hh24:mi:ss')))b
+where a.ts#=b.tablespace_id;
+
+ select job,LAST_DATE,LAST_SEC,NEXT_DATE,NEXT_SEC,TOTAL_TIME,what from user_jobs;

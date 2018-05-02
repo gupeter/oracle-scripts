@@ -1,0 +1,115 @@
+主库：
+DB_NAME=tnps
+DB_UNIQUE_NAME=tnps
+LOG_ARCHIVE_CONFIG='DG_CONFIG=(tnps,dgnps)'
+CONTROL_FILES='+DATA/dgnps/controlfile/control1.ctl', '+DATA/dgnps/controlfile/control2.ctl'
+LOG_ARCHIVE_DEST_1=
+ 'LOCATION=/arch1/chicago/ 
+  VALID_FOR=(ALL_LOGFILES,ALL_ROLES)
+  DB_UNIQUE_NAME=chicago'
+LOG_ARCHIVE_DEST_2=
+ 'SERVICE=boston ASYNC
+  VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) 
+  DB_UNIQUE_NAME=boston'
+LOG_ARCHIVE_DEST_STATE_1=ENABLE
+LOG_ARCHIVE_DEST_STATE_2=ENABLE
+REMOTE_LOGIN_PASSWORDFILE=EXCLUSIVE
+LOG_ARCHIVE_FORMAT=%t_%s_%r.arc
+LOG_ARCHIVE_MAX_PROCESSES=30
+
+alter system set standby_file_management=manual; 
+
+alter database add standby logfile thread 1 group 17 '+data' size 50m;
+alter database add standby logfile thread 1 group 18 '+data' size 50m;
+alter database add standby logfile thread 1 group 19 '+data' size 50m;
+alter database add standby logfile thread 2 group 20 '+data' size 50m;
+alter database add standby logfile thread 2 group 21 '+data' size 50m;
+alter database add standby logfile thread 2 group 22 '+data' size 50m;
+
+
+alter database force logging;
+mkdir -p /u01/app/oracle/admin/dgnps/adump
+
+alter system set LOG_ARCHIVE_CONFIG='DG_CONFIG=(tnps,dgnps,fnps)';
+alter system set LOG_ARCHIVE_DEST_1='LOCATION=+fra VALID_FOR=(ALL_LOGFILES,ALL_ROLES) DB_UNIQUE_NAME=tnps';
+alter system set LOG_ARCHIVE_DEST_2='SERVICE=dgnps lgwr ASYNC COMPRESSION=ENABLE VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=dgnps';
+alter system set LOG_ARCHIVE_DEST_3='SERVICE=fnps lgwr ASYNC COMPRESSION=ENABLE VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=fnps';
+alter system set LOG_ARCHIVE_DEST_STATE_1=ENABLE;
+alter system set LOG_ARCHIVE_DEST_STATE_2=ENABLE;
+alter system set LOG_ARCHIVE_DEST_STATE_3=DEFER;
+alter system set REMOTE_LOGIN_PASSWORDFILE=EXCLUSIVE;
+alter system set LOG_ARCHIVE_MAX_PROCESSES=3;
+alter system set fal_server='dgnps','fnps';
+alter system set fal_client='tnps1' sid='tnps1';
+alter system set fal_client='tnps2' sid='tnps2';
+alter system set DB_FILE_NAME_CONVERT='+DATA/dgnps/datafile','+DATA/tnps/datafile','+DATA/fnps/datafile','+DATA/tnps/datafile' scope=spfile;
+alter system set LOG_FILE_NAME_CONVERT='+DATA/dgnps','+DATA/tnps','+DATA/fnps','+DATA/tnps' scope=spfile;
+alter system set STANDBY_FILE_MANAGEMENT=AUTO;
+
+
+
+备库：
+DB_NAME=tnps
+DB_UNIQUE_NAME=dgnps
+LOG_ARCHIVE_CONFIG='DG_CONFIG=(tnps,dgnps)'
+*.control_files='+DATA/dgnps/controlfile/control1.ctl','+DATA/dgnps/controlfile/control2.ctl'
+DB_FILE_NAME_CONVERT='+DATA/tnps/datafile','+DATA/dgnps/datafile'
+LOG_FILE_NAME_CONVERT='+DATA/tnps/onlinelog','+DATA/dgnps/onlinelog'
+LOG_ARCHIVE_DEST_1='LOCATION=+fra VALID_FOR=(ALL_LOGFILES,ALL_ROLES) DB_UNIQUE_NAME=dgnps' 
+LOG_ARCHIVE_DEST_2='SERVICE=tnps ASYNC COMPRESSION=ENABLE VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=tnps'
+fal_server=tnps1,tnps2
+fal_client=dgnps
+LOG_ARCHIVE_DEST_STATE_1=ENABLE
+LOG_ARCHIVE_DEST_STATE_2=ENABLE
+STANDBY_FILE_MANAGEMENT=AUTO
+REMOTE_LOGIN_PASSWORDFILE=EXCLUSIVE
+LOG_ARCHIVE_FORMAT=%t_%s_%r.arc
+LOG_ARCHIVE_MAX_PROCESSES=2
+compatible='11.2.0.4.0'
+
+orapwd file=$ORACLE_HOME/dbs/orapw$ORACLE_SID password=oracle entries=10 ignorecase=Y
+
+
+run {
+backup database format '/backup/db_%t_%s_%U.bak' tag='db_full03';
+sql 'alter system archive log current';
+backup archivelog all format '/backup/arch_%t_%s_%U.bak' tag='arch03';
+backup current controlfile for standby format '/backup/ctl_2U.bak' ;
+}
+
+restore standby controlfile from '/backup/ctl_878203475_7_07q5gkij_1_1.bak'
+run {
+  restore database;
+  switch datafile all;
+  }
+  
+  
+  recover database;
+  }
+  
+
+
+ALTER DATABASE COMMIT TO SWITCHOVER TO PHYSICAL STANDBY;
+ALTER DATABASE COMMIT TO SWITCHOVER TO PRIMARY;
+alter database recover managed standby database disconnect from session;--非实时
+alter database recover managed standby database cancel;
+alter database recover managed standby database using current logfile disconnect from session;
+
+select SEQUENCE# ,APPLIED from v$archived_log;
+select SWITCHOVER_STATUS from v$database;
+select OPEN_MODE  ,DATABASE_ROLE from v$database;
+
+
+主库：
+su - oracle
+srvctl add service -d tnps -s p1 -r tnps1 -a tnps2 -l PRIMARY -q TRUE -e SESSION -m BASIC -w 10 -z 150
+srvctl add service -d tnps -s p2 -r tnps2 -a tnps1 -l PRIMARY -q TRUE -e SESSION -m BASIC -w 10 -z 150
+
+备库：
+su - oracle
+srvctl add database -d dgnps -r PRIMARY -o $ORACLE_HOME -s open
+srvctl add service -d dgnps -s p1 -l PRIMARY -q TRUE -e SESSION -m BASIC -w 10 -z 150
+srvctl add service -d dgnps -s p2 -l PRIMARY -q TRUE -e SESSION -m BASIC -w 10 -z 150
+
+EXEC dbms_stats.gather_schema_stats(ownname => 'WELF',estimate_percent => dbms_stats.auto_sample_size,method_opt  => 'for all columns size auto',degree => dbms_stats.auto_degree);
+

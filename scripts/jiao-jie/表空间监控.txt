@@ -1,0 +1,96 @@
+#!/bin/bash
+PROCESS_FLAG=1
+CONNECT_FLAG=1
+MESSAGE=""
+RECIPIENT="jiankong@successlottery.com"
+
+check_connect()
+{
+if [ -f ~/.bash_profile ];then
+    . ~/.bash_profile
+fi
+
+# check database is open or not
+if  [ -f ./connect_tbspace.tmp ];then
+  rm  connect_tbspace.tmp
+fi
+
+$ORACLE_HOME/bin/sqlplus -s '/ as sysdba' <<EOF
+set feedback off echo off
+spool connect_tbspace.tmp
+alter session set nls_date_format='YYYY-MM-DD:HH24:MI:SS';
+select sysdate from dual;
+select name,open_mode from v\$database;
+spool off
+exit
+EOF
+
+if  [ -f connect_tbspace.tmp  ];then
+  COUNT=$(grep -i 'READ WRITE' connect_tbspace.tmp  |wc -l)
+  if [ $COUNT -eq 1 ]; then
+    echo "OK, Oracle Connect Normal"
+  else
+    echo "Warning: Database Is Not Open"
+    CONNECT_FLAG=0
+  fi
+else
+  echo "Warning: Can't Connect To Oracle"
+  CONNECT_FLAG=0
+fi
+}
+
+check_tbspace()
+{
+if [ -f ~/.bash_profile ];then
+    . ~/.bash_profile
+fi
+
+if  [ -f ./tbspace.tmp ];then
+  rm tbspace.tmp
+fi
+
+# check long sql which run more than specified seconds
+$ORACLE_HOME/bin/sqlplus -s '/ as sysdba' <<EOF
+set feed off
+set heading off
+spool tbspace.tmp
+
+SELECT 
+       'TBS_NAME :'||TBS_NAME||chr(10)||'SUM_SPACE :'||to_char(SUM_SPACE,'fm9999999990.00')||'M'
+       ||chr(10)||'USED_SPACE :'||to_char(USED_SPACE,'fm9999999990.00')||'M'||chr(10)||'FREE_SPACE :'||to_char(SUM_SPACE-USED_SPACE,'fm9999999990.00')||'M'
+       ||chr(10)||'PCT_USED :'||to_char(PCT_USED,'fm9999999990.00')||'%' x
+FROM
+(
+  SELECT D.TABLESPACE_NAME as TBS_NAME,
+       SPACE SUM_SPACE,
+       SPACE1 - NVL(FREE_SPACE, 0) USED_SPACE,
+       FREE_SPACE,
+       ROUND(((SPACE1 - NVL(FREE_SPACE, 0)) / SPACE) * 100, 2) PCT_USED, 
+       ROUND(NVL(FREE_SPACE, 0) / SPACE * 100, 2) PCT_FREE   
+  FROM (SELECT TABLESPACE_NAME,
+               ROUND(SUM(BYTES) / (1024 * 1024), 2) SPACE1,
+              30000*count(*) SPACE,
+               SUM(BLOCKS) BLOCKS
+          FROM DBA_DATA_FILES
+         GROUP BY TABLESPACE_NAME) D,
+       (SELECT TABLESPACE_NAME,
+               ROUND(SUM(BYTES) / (1024 * 1024), 2) FREE_SPACE
+          FROM DBA_FREE_SPACE
+         GROUP BY TABLESPACE_NAME) F
+  WHERE D.TABLESPACE_NAME = F.TABLESPACE_NAME(+)
+) where PCT_USED>80;
+spool off
+exit
+EOF
+if [ `cat tbspace.tmp|wc -l` -gt 0 ]; then
+  cat tbspace.tmp | mailx -s "$(echo -e "[WARNING]: Tablespace used >80% on ${ORACLE_SID}\nContent-Type: text/html")" $RECIPIENT
+else
+  echo "OK, The free space is enough."
+fi
+}
+
+check_connect
+#echo "FLAG:"$FLAG_CONN
+if [ $CONNECT_FLAG -eq 1 ]; then
+  check_tbspace
+fi

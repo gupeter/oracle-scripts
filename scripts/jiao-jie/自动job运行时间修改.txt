@@ -1,0 +1,37 @@
+---修改每日运行时间
+exec dbms_scheduler.disable( name => 'MONDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'MONDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=MON;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'MONDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'TUESDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'TUESDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=TUE;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'TUESDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'WEDNESDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'WEDNESDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=WED;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'WEDNESDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'THURSDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'THURSDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=THU;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'THURSDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'FRIDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'FRIDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=FRI;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'FRIDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'SATURDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'SATURDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=SAT;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'SATURDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'SUNDAY_WINDOW', force => TRUE);
+exec dbms_scheduler.set_attribute( name => 'SUNDAY_WINDOW', attribute => 'repeat_interval',value => 'freq=daily;byday=SUN;byhour=2;byminute=0;bysecond=0');
+exec dbms_scheduler.enable( name => 'SUNDAY_WINDOW');
+
+--修改周末运行持续时间
+exec dbms_scheduler.disable( name => 'SATURDAY_WINDOW', force => TRUE);
+exec DBMS_SCHEDULER.SET_ATTRIBUTE('SATURDAY_WINDOW', 'DURATION', '+000 04:00:00');
+exec dbms_scheduler.enable( name => 'SATURDAY_WINDOW');
+
+exec dbms_scheduler.disable( name => 'SUNDAY_WINDOW', force => TRUE);
+exec DBMS_SCHEDULER.SET_ATTRIBUTE('SUNDAY_WINDOW', 'DURATION', '+000 04:00:00');
+exec dbms_scheduler.enable( name => 'SUNDAY_WINDOW');

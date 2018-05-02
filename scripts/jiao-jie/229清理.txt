@@ -1,0 +1,68 @@
+--查询时间对应的分区
+alter session set nls_timestamp_format='yyyy-mm-dd hh24:mi:ss'
+drop table new1 purge;
+create table new1 as
+select TABLE_NAME,PARTITION_NAME,HIGH_VALUE,PARTITION_POSITION,TABLESPACE_NAME from user_tab_partitions where  table_name='NEW_TICKETBASE';
+
+select TABLE_NAME,PARTITION_NAME,to_char(to_date(dbms_lob.substr(a,7,12),'yyyy-mm')-1,'yyyy-mm'),PARTITION_POSITION,TABLESPACE_NAME from new1 --确定要删除时间对应的分区名称
+
+expdp system/oracle dumpfile=t<删除的时间>.dmp directory=dmp logfile=log<删除的时间>.log tables=NEW_TICKETBASE:<分区名1>,NEW_TICKETBASE:<分区名2> ---以此类推
+ALTER TABLE NEW_TICKETBASE DROP PARTITION <分区名>; ---默认的T20161001删不掉
+
+-------------------恢复分区表
+impdp system/oracle dumpfile=t<删除的时间>.dmp directory=dmp logfile=log<删除的时间>.log PARTITION_OPTIONS=DEPARTITION ---查看导入的表名
+
+============================================================
+脚本
+============================================================
+---创建临时中间表
+create table t3
+(
+  recid             VARCHAR2(32) not null,
+  ticketbasedata    CLOB,
+  insertdatetime    TIMESTAMP(6),
+  printdatetimelist VARCHAR2(100),
+  printoperator     VARCHAR2(16),
+  remark            VARCHAR2(30)
+)
+lob(ticketbasedata) store as securefile
+(
+        tablespace LOTTERY
+        disable storage in row
+        chunk 8192
+        compress high 
+        cache)
+partition by range(insertdatetime)
+interval(numtoyminterval(1,'MONTH')) store in (LOTTERY)
+(partition NEW_TICKETBASE0161001 values less than (to_date('2016-10-01','YYYY-MM-DD')) TABLESPACE LOTTERY
+lob(ticketbasedata) store as securefile
+(
+        tablespace LOTTERY
+        disable storage in row
+        chunk 8192
+        compress high 
+        cache)
+);
+
+DECLARE
+BEGIN
+  DBMS_REDEFINITION.START_REDEF_TABLE('LOTTERY','T2','T3'); --复制数据
+  END;
+  
+DECLARE
+L_ERROR_COUNT pls_integer := 0;  --复制索引等信息
+BEGIN
+  DBMS_REDEFINITION.COPY_TABLE_DEPENDENTS('LOTTERY','T2','T3',1,
+  TRUE,TRUE,TRUE,TRUE,L_ERROR_COUNT);
+  DBMS_OUTPUT.PUT_LINE('errors := ' || TO_CHAR(L_ERROR_COUNT));
+  END;
+  
+
+BEGIN  --完成重名
+  DBMS_REDEFINITION.FINISH_REDEF_TABLE('LOTTERY','T2','T3');
+END;
+
+---查询约束和索引
+ SELECT * FROM DBA_CONSTRAINTS WHERE TABLE_NAME='T2'
+ 
+ALTER TABLE T2 ADD CONSTRAINT PK_T2 PRIMARY KEY (RECID,insertdatetime) USING INDEX LOCAL 

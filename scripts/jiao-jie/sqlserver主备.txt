@@ -1,0 +1,144 @@
+-------------------主机
+use master
+
+drop CERTIFICATE Cert_Host;
+drop MASTER KEY
+
+CREATE MASTER KEY ENCRYPTION BY PASSWORD='Gugu110110';
+
+
+CREATE CERTIFICATE Cert_Host
+
+WITH SUBJECT=N'Cert_Host Certificate',START_DATE='20120405',EXPIRY_DATE='20990405';
+
+BACKUP CERTIFICATE Cert_Host TO FILE=N'D:\zhengshu\Cert_Host.cer'; ---根据实际的来
+GO
+
+IF EXISTS(select * from sys.database_mirroring_endpoints where name='Endpoint_Host')
+    DROP ENDPOINT Endpoint_Host
+GO
+CREATE ENDPOINT Endpoint_Host
+STATE = STARTED
+AS TCP
+(
+    LISTENER_PORT=5022,
+    LISTENER_IP=ALL
+)
+
+FOR DATABASE_MIRRORING
+(
+    AUTHENTICATION=CERTIFICATE Cert_Host,
+    ENCRYPTION=REQUIRED ALGORITHM AES,
+    ROLE=PARTNER
+)
+
+GO
+
+------------------------创建mirror登入用户
+CREATE LOGIN Login_For_Mirror WITH PASSWORD=N'Gugu110110';
+CREATE USER User_For_Mirror FOR LOGIN Login_For_Mirror;
+CREATE CERTIFICATE Cert_For_Mirror AUTHORIZATION User_For_Mirror FROM FILE=N'D:\zhengshu\Cert_mirror.cer';
+GRANT CONNECT ON ENDPOINT::Endpoint_Host TO Login_For_Mirror;
+GO
+=======================================================================================
+在镜像库中操作
+===================================================================================
+
+use master
+
+drop CERTIFICATE Cert_mirror;
+drop MASTER KEY
+
+
+    CREATE MASTER KEY ENCRYPTION BY PASSWORD='Gugu110110';
+
+
+CREATE CERTIFICATE Cert_mirror
+
+WITH SUBJECT=N'Cert_mirror Certificate',START_DATE='20120405',EXPIRY_DATE='20990405';
+
+BACKUP CERTIFICATE Cert_mirror TO FILE=N'D:\zhengshu\Cert_mirror.cer'; ---根据实际情况
+GO
+
+
+    DROP ENDPOINT Endpoint_mirror
+
+CREATE ENDPOINT Endpoint_mirror
+STATE = STARTED
+AS TCP
+(
+    LISTENER_PORT=5022,
+    LISTENER_IP=ALL
+)
+
+FOR DATABASE_MIRRORING
+(
+    AUTHENTICATION=CERTIFICATE Cert_mirror,
+    ENCRYPTION=REQUIRED ALGORITHM AES,
+    ROLE=PARTNER
+)
+
+GO
+-------------------创建主库登入用户
+CREATE LOGIN Login_For_Host WITH PASSWORD=N'PWD_DBMirror986252588';
+CREATE USER User_For_Host FOR LOGIN Login_For_Host;
+CREATE CERTIFICATE Cert_For_Host AUTHORIZATION User_For_Host FROM FILE =N'D:\zhengshu\Cert_Host.cer';
+GRANT CONNECT ON ENDPOINT::Endpoint_mirror TO Login_For_Host;
+GO
+
+========================================================================================
+备份恢复数据库
+========================================================================================
+主库：
+USE lotface
+GO
+
+BACKUP DATABASE lotface TO DISK = N'D:\lotface.bak'
+WITH FORMAT, INIT, NAME = N'lotface', SKIP, NOREWIND, NOUNLOAD, STATS = 10;
+GO
+
+
+BACKUP LOG [lotface] TO DISK = N'D:\lotfacelog.trn'
+WITH NOFORMAT, NOINIT, NAME = N'lotfacelog', SKIP, NOREWIND, NOUNLOAD, STATS = 10;
+GO 
+
+备库：
+USE master
+GO
+RESTORE DATABASE [lotface] FROM DISK = N'D:\lotface.bak'
+WITH FILE = 1,
+NORECOVERY, NOUNLOAD, REPLACE, STATS = 10
+GO
+
+RESTORE LOG [lotface] FROM DISK = N'D:\lotfacelog.trn'
+WITH FILE = 2, NORECOVERY, NOUNLOAD, STATS = 10
+GO
+
+-----------------------------------------------------------------------------------------
+启动镜像
+备库：
+ALTER DATABASE lotface   
+    SET PARTNER = 'TCP://192.168.20.101:5022';  
+GO  
+
+主库：
+ALTER DATABASE lotface   
+    SET PARTNER = 'TCP://192.168.20.100:5022';  
+GO  
+
+主库：
+ALTER DATABASE <DatabaseName> SET PARTNER SAFETY FULL;   --事务安全,同步模式
+ALTER DATABASE <DatabaseName> SET PARTNER SAFETY OFF;    --事务不安全,异步模式
+=====================================================================================
+切换主备
+==============================================================
+主库：
+ALTER DATABASE <DatabaseName> SET PARTNER SAFETY FULL;  
+
+ALTER DATABASE <DatabaseName> SET PARTNER FAILOVER;
+
+--主库意外down
+--备机执行：
+ USE master;
+ ALTER DATABASE <DatabaseName> SET PARTNER FORCE_SERVICE_ALLOW_DATA_LOSS;
+

@@ -1,0 +1,50 @@
+select * into Sale_Projectbak from Sale_Project where where CHIPTIME>='2016-10-01'
+
+exec master..xp_cmdshell 'bcp lotface.dbo.Sale_Project out D:\Sale_Project-20161001.txt -c  -Usa -Padmin@128.com'
+
+truncate table Sale_Project
+
+set identity_insert Sale_Project on
+insert into Sale_Project (ProjId
+,UserId
+,OrderID
+,UserProjId
+,ChipTime
+,LotId
+,LotIssue
+,OneMoney
+,ChipMul
+,ChipCount
+,ChipMoney
+,ProjMemo
+,ClientType
+,UserIP
+,ShotType
+,ShotDesc
+,Bonus
+,RealBonus
+,ProjState
+,AuditFlag
+,AuditAdmin
+,AuditTime
+,BillAssigner
+,BillFlag
+,BillMan
+,BillTime
+,CalcPrizeFlag
+,CalcPrizeMan
+,CalcPrizeTime
+,PrizeFlag
+,PrizeMan
+,PrizeTime
+,CancelFlag
+,CancelMan
+,CancelTime
+,AdminMemo
+,ShotDetail
+,JDIssue
+,shotCount
+,batchOrderID) select * from Sale_Projectbak
+
+set identity_insert Sale_Project off
+

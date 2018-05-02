@@ -1,0 +1,42 @@
+在shell中注意 \$
+
+cat >> /etc/init.d/osw.sh <<'EOF'
+export OSW_SRC_DIR=/oradata/osw/oswbb
+#echo \$OSW_SRC_DIR
+
+echo "****************************************************" > \$OSW_SRC_DIR/init_osw.log
+case \$1 in
+'start')
+echo "...Starting OSW from init at `date` " > \$OSW_SRC_DIR/init_osw.log
+cd \$OSW_SRC_DIR;
+nohup ./OSWatcher.sh 10 48 &
+;;
+'stop')
+echo "...Stopping OSW from init at `date` " > \$OSW_SRC_DIR/init_osw.log
+cd \$OSW_SRC_DIR;
+./stopOSWbb.sh
+;;
+*)
+echo "Usage: \$0 start|stop" >&2
+exit 1
+;;
+esac
+exit 0
+EOF
+
+chmod +x /etc/init.d/osw.sh
+ln -s /etc/init.d/osw.sh /etc/rc.d/rc3.d/S100osw.sh
+
+起图形化
+alias posw='java -jar /osw/oswbb/oswbba.jar -i /osw/oswbb/archive/'
+java -jar oswbba.jar -i /osw/oswbb/archive/
+
+rac 心跳
+vi /osw/oswbb/private.net
+echo "zzz ***"`date`  
+traceroute -r -F 10.10.10.1  
+traceroute -r -F 10.10.10.2
+rm locks/lock.file
+
+chown oracle:oinstall /osw/oswbb/private.net
+chmod +x /osw/oswbb/private.net

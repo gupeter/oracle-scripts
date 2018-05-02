@@ -1,0 +1,14 @@
+impdp tt/oracle dumpfile=TBLOTTERY_expdp_20140917.dmp directory=DUMP_DIR JOB_NAME=ac logfile=log2 REMAP_SCHEMA=TBLOTTERY:tt tables=TICKETDETAIL CONTENT=DATA_ONLY PARALLEL=4
+
+imp tt/oracle@peter1 file=E:\öÎ°Ô\NewDb2\xinbaNew-20140922.exp log=imp2log FROMUSER=TBLOTTERY touser=tt TABLES=TICKETDETAIL INDEXES=n GRANTS=n rows=y ignore=y show=y
+
+Admin
+zabbix
+
+ls -i /var/log/httpd/ema.md-access_log.2013-03-10.txt | awk '{print $1}' | xargs find . -inum 
+
+expdp test1/oracle DIRECTORY=dmp DUMPFILE=60_%U.dmp SCHEMAS=halldev log=130.log PARALLEL=4
+
+impdp system/oracle DIRECTORY=dump DUMPFILE=60_01.dmp,60_02.dmp,60_03.dmp,60_04.dmp,60_05.dmp,60_06.dmp REMAP_SCHEMA=LOTTERY:LOTTERY PARALLEL=4 LOG=111.log CLUSTER=n
+
+exp lottery/lot128@14.11 tables=halldev.sys_game_config ,halldev.sys_job_lock ,halldev.sys_menu ,halldev.sys_role ,halldev.sys_role_operate ,halldev.sys_user ,halldev.sys_user_role ,halldev.tms_game file=D:\123.dump log=D:\123.log

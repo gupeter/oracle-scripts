@@ -1,0 +1,64 @@
+--grep查询符合字符的信息
+ grep -r -E '/dev/sdc|/dev/sdd' a
+ 
+  SELECT SQL_ID,NAME, POSITION, value_string,  ANYDATA.accesstimestamp (value_anydata)
+  From V$sql_Bind_Capture A where sql_id='gsbx9r059mrxh'
+  
+ --mysql
+ 修改root密码
+ service mysql stop
+  mysqld_safe --user=mysql --skip-grant-tables --skip-networking &
+  mysql -u root mysql
+   update user set User='root',Password='*5CF27CEBCC1A69F26075EABD5EA60E02B32A2DCB' where Host='localhost';
+  FLUSH PRIVILEGES; 
+  
+  ps -ef|grep mysql
+  kill -9 mysqld_safe
+  kill -9 mysql
+service mysql start
+
+--5.7 
+ALTER USER 'jeffrey'@'localhost' PASSWORD EXPIRE NEVER;
+mysqld --initialize --user=mysql  --basedir=/mysql-data  --datadir=/mysql-data/data
+
+
+--安装
+rpm -ivh mysql-commercial-common-5.7.12-1.1.el6.x86_64.rpm
+rpm -ivh mysql-commercial-libs-5.7.12-1.1.el6.x86_64.rpm
+rpm -ivh mysql-commercial-client-5.7.12-1.1.el6.x86_64.rpm
+rpm -ivh mysql-commercial-server-5.7.12-1.1.el6.x86_64.rpm
+
+
+CREATE TABLESPACE `ts1` ADD DATAFILE 'ts1.ibd' Engine=InnoDB;
+CREATE TABLE t4 (c1 INT PRIMARY KEY) TABLESPACE ts2 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;
+
+只查看第一个binlog文件的内容
+
+show binlog events;
+查看指定binlog文件的内容
+
+show binlog events in 'mysql-bin.000002';
+查看当前正在写入的binlog文件
+
+show master status\G
+获取binlog文件列表
+
+show binary logs;
+
+-----------------------------------
+delimiter $$
+ create procedure ptest()
+ begin
+ declare pid int ;
+ set pid = 1000000;
+ while pid>0 do
+ insert into abc values(pid,'uuu');
+ set pid = pid-1;
+ end while;
+ end $$
+
+show processlist 
+
+
+
+

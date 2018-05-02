@@ -1,0 +1,38 @@
+#!/bin/bash
+export ORACLE_SID=rac2
+export ORACLE_HOME=/u01/app/oracle/product/11.2.0/db_1
+export ORACLE_BASE=/u01/app/oracle
+export DATE2=`date "+%Y-%m-%d"`
+mypath="/backup/$DATE2"
+
+
+if [ ! -d "$mypath" ]; then
+mkdir -p "$mypath"
+chown oracle:oinstall "$mypath"
+fi
+
+find /backup/ -mtime +14 -name "*" -exec ls {} \; >$mypath/rm.log
+find /backup/ -mtime +14 -name "*" -exec rm -rf {} \;
+
+cd $ORACLE_HOME/bin
+./rman log=/backup/$DATE2/backupall_$DATE2.log <<EOF
+connect target /
+configure controlfile autobackup format for device type disk to '/backup/${DATE2}/spcon_%F';
+run{
+allocate channel 'c1' type disk;
+allocate channel 'c2' type disk;
+sql 'alter system archive log current';
+backup as compressed backupset format '/backup/${DATE2}/db_%d_%T_%U' database;
+backup archivelog all delete all input  format '/backup/${DATE2}/arc_%t_%s';
+sql 'alter system archive log current';
+release channel c1;
+release channel c2;
+}
+
+crosscheck backup;
+delete noprompt expired backup;
+delete noprompt obsolete;
+#delete noprompt backup of database completed before 'sysdate - 30';
+exit;
+EOF
+echo "backup complete!"

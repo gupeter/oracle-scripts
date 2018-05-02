@@ -1,0 +1,61 @@
+在sqlserver里面用sp_helpserver；查看服务器，如果有配置复制服务，得先右键停止卸载复制和分发；其它服务应该也类似吧，我没配置过。
+
+然后重启电脑。
+
+由于数据库实例所用的主机名不会自动更新，所以要手动重新配置。
+进入桌面后打开sqlserver管理工具：
+执行
+select @@servername;
+可以看到，依旧是原主机名。
+运行
+sp_dropserver '原主机名';
+删除原主机名，然后运行
+sp_addserver '现主机名','local';
+更新至现主机名；
+最后重启数据库服务即可；可以再次查询select @@servername以验证结果。
+
+
+===================================
+sp_dropserver 执行后若报错：仍有对服务器的远程登录或链接登录
+可以执行：exec sp_dropserver '原主机名', 'droplogins';
+
+select * from msdb.dbo.MSdistpublishers;
+可以查看已存在的发布服务器
+=====================================
+
+
+alter table abc add constraint pk_p primary key(id)
+ALTER TABLE abc ALTER COLUMN id int not NULL; 
+
+====查看数据库大小（包括日志）
+EXEC sp_spaceused @updateusage = N'TRUE';
+
+-===查看锁
+查看被锁表：
+select   request_session_id   spid,OBJECT_NAME(resource_associated_entity_id) tableName   
+from   sys.dm_tran_locks where resource_type='OBJECT'
+ 
+spid   锁表进程 
+tableName   被锁表名
+ 
+解锁：
+ 
+declare @spid  int 
+Set @spid  = 57 --锁表进程
+declare @sql varchar(1000)
+set @sql='kill '+cast(@spid  as varchar)
+exec(@sql)
+
+==========改变自增长起始数字
+dbcc checkident([Bill_Task],reseed,1867704)
+
+---查看所有表的大小
+EXEC sp_spaceused @updateusage = N'TRUE'; ---大表删除，索引删除更新信息  
+create table #t(name varchar(255), rows bigint, reserved varchar(20), data varchar(20), index_size varchar(20), unused varchar(20)) 
+exec sp_MSforeachtable "insert into #t exec sp_spaceused '?'"  
+
+select replace(reserved,'KB','') as nm into t1 from #t --替换kb
+select SUM(+convert(int,nm))/1024/1024  from t1 a 
+select * from #t order by rows desc
+
+drop table #t

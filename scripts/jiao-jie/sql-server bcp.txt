@@ -1,0 +1,25 @@
+USE [LotFace]
+GO
+/****** Object:  StoredProcedure [dbo].[pr_zb]    Script Date: 12/09/2016 11:58:12 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER procedure [dbo].[pr_zb]
+as
+begin
+declare @file_path varchar(200);
+declare @file_name varchar(200);
+declare @exec_sql  varchar(2000);
+set @file_path = 'E:\zb\'
+set @file_name = CONVERT(varchar(100), GETDATE(), 112)+'.xls'
+set @exec_sql = 'select ''用户名'',''交易号'',''交易时间'',''存入金额'',''支出金额'',''余额'',''支付方式'',''备注'' \
+union all \
+select b.USERNAME ,cast(a.RecId as varchar) re,convert(varchar,a.ExcDate,120) ex,cast(a.InMoney as varchar) inmo,cast(a.OutMoney as varchar) oumo,cast(a.USERBALANCE as varchar) us, \
+case when paymode=0 then ''auto'' when paymode=1 then ''现金'' when paymode=2 then ''银行转帐'' when paymode=3 then ''邮局汇款'' when paymode=4 then ''在线支付'' when paymode=8 then ''挂账'' when paymode=9 then ''其他方式'' end pa,EXCMEMO  \
+from LotFace.dbo.SALE_EXCHANGE a,LotFace.dbo.SALE_USER b \
+where a.UserId=b.UserId and EXCDATE >=  dateadd(month,datediff(month,0,GETDATE()-10),0) \
+and EXCDATE< dateadd(month,datediff(month,0,GETDATE()),0) and USERSTATE=0 order by 2 desc'  
+set @exec_sql = ' bcp "'+@exec_sql+'" queryout "'+@file_path+''+@file_name+'" -c -q -S "192.168.20.101" -U "sa" -P "admin@128.com"';
+exec master..xp_cmdshell @exec_sql
+end

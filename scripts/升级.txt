@@ -1,0 +1,117 @@
+1372859.1
+OPatch.SKIP_VERIFY_SPACE=true
+
+#!/usr/bin/ksh
+ while [ 1 = 1 ]
+ do
+ echo `date`" "`ping 10.102.105.36` |grep alive >;>;pingresult.txt
+ sleep 3
+ done
+
+========11.2.0.3
+su - root
+/oracle/u01/app/11.2.0/grid/crs/install/rootcrs.pl -unlock
+
+su - grid
+/oracle/u01/app/11.2.0/grid/OPatch/opatch napply -oh $ORACLE_HOME -local /opatch/16619898
+/oracle/u01/app/11.2.0/grid/OPatch/opatch napply -oh $ORACLE_HOME -local /opatch/16619892
+
+su - oracle
+/opatch/16619898/custom/server/16619898/custom/scripts/prepatch.sh -dbhome $ORACLE_HOME
+
+/oracle/u01/app/db/11.2.0/OPatch/opatch napply -oh $ORACLE_HOME -local /opatch/16619898/custom/server/16619898
+
+/oracle/u01/app/db/11.2.0/OPatch/opatch napply -oh $ORACLE_HOME -local /opatch/16619892
+
+/opatch/16619898/custom/server/16619898/custom/scripts/postpatch.sh -dbhome $ORACLE_HOME
+
+su - root
+/oracle/u01/app/11.2.0/grid/rdbms/install/rootadd_rdbms.sh
+/oracle/u01/app/11.2.0/grid/crs/install/rootcrs.pl -patch
+
+
+slibclean
+
+=========11.2.0.4
+su - root
+/u01/app/11.2.0/grid/crs/install/rootcrs.pl -unlock
+
+su - grid
+$ORACLE_HOME/OPatch/opatch napply -oh $ORACLE_HOME -local /opatch/22191577/21948347
+$ORACLE_HOME/OPatch/opatch napply -oh $ORACLE_HOME -local /opatch/22191577/21948348
+$ORACLE_HOME/OPatch/opatch napply -oh $ORACLE_HOME -local /opatch/22191577/21948355
+
+su - oracle
+/opatch/22191577/21948348/custom/server/21948348/custom/scripts/prepatch.sh -dbhome $ORACLE_HOME
+
+$ORACLE_HOME/OPatch/opatch napply -oh $ORACLE_HOME -local /opatch/22191577/21948348/custom/server/21948348
+
+$ORACLE_HOME/OPatch/opatch napply -oh $ORACLE_HOME -local /opatch/22191577/21948347
+
+/opatch/22191577/21948348/custom/server/21948348/custom/scripts/postpatch.sh -dbhome $ORACLE_HOME
+
+su - root
+/u01/app/11.2.0/grid/rdbms/install/rootadd_rdbms.sh
+/u01/app/11.2.0/grid/crs/install/rootcrs.pl -patch
+
+
+
+select owner,object_type,count(*)                                                 
+from dba_objects                                                                  
+where status='INVALID'                                                            
+group by owner,object_type order by owner,object_type ;    
+----------------------------------------------------------------------vipÐÞ¸Ä
+
+/oracle/11.2.0.3/grid/bin/crsctl modify res ora.scan1.vip -attr "STOP_DEPENDENCIES=hard(intermediate:ora.net1.network)"
+/oracle/11.2.0.3/grid/bin/crsctl modify res ora.jddb1.vip -attr "STOP_DEPENDENCIES=hard(intermediate:ora.net1.network)"
+/oracle/11.2.0.3/grid/bin/crsctl modify res ora.jddb2.vip -attr "STOP_DEPENDENCIES=hard(intermediate:ora.net1.network)"
+
+cd $ORACLE_HOME/rdbms/admin
+sqlplus /nolog
+SQL> CONNECT / AS SYSDBA
+SQL> STARTUP
+SQL> @catbundle.sql psu apply
+SQL> QUIT
+
+srvctl add service -d jldb -s srvjl -r jldb2,jldb1 -P basic -e select -m basic -z 10 -w 5
+1312749.1
+
+
+srvctl start service -d jldb -s srvjl
+
+select name,failover_method,failover_type,goal,clb_goal from dba_services
+where name='jkdbsr';
+
+
+
+--------------------------roll back
+/oracle/11.2.0.3/grid/OPatch/opatch rollback -local -id 14727310 -oh $ORACLE_HOME
+/oracle/11.2.0.3/grid/OPatch/opatch rollback -local -id 15876003 -oh $ORACLE_HOME
+
+su - oracle
+/oracle/15876003/custom/server/15876003/custom/scripts/prepatch.sh -dbhome $ORACLE_HOME
+
+/oracle/u01/app/product/11.2.0.3/db_1/OPatch/opatch rollback -local -id 14727310 -oh $ORACLE_HOME
+/oracle/u01/app/product/11.2.0.3/db_1/OPatch/opatch rollback -local -id 15876003 -oh $ORACLE_HOME
+
+/oracle/15876003/custom/server/15876003/custom/scripts/postpatch.sh -dbhome $ORACLE_HOME
+
+su - root
+/oracle/11.2.0.3/grid/rdbms/install/rootadd_rdbms.sh
+/oracle/11.2.0.3/grid/crs/install/rootcrs.pl -patch
+
+xuxingyuan@longshine.com
+warning:  Clock skew detected.  Your build may be incomplete
+
+
+-----------------------µ¥»ú
+grid
+cd
+$ORACLE_HOME/OPatch/ocm/bin/emocmrsp 
+/u01/app/11.2.0/grid/OPatch/opatch auto /opatch/22191577/ -oh /u01/app/11.2.0/grid -ocmrf /home/grid/ocm.rsp
+
+db
+cd
+$ORACLE_HOME/OPatch/ocm/bin/emocmrsp 
+$ORACLE_HOME/OPatch/opatch auto /opatch/22191577/ -oh /u01/app/oracle/product/11.2.0/db_1 -ocmrf /home/oracle/ocm.rsp
+    

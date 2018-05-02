@@ -1,0 +1,54 @@
+Oracle 11g缺省安装数据库启动了audit功能，导致oracle不断累积sys.aud$表及相关索引数据量增加；
+如果导致表空间满了，在alert日志中将会报ORA-1654: unable to extend index SYS....错误。
+如果不用到审计功能，建议关闭审计。
+处理过程： 
+1、用oracle用户登录到数据库服务器，执行：
+sqlplus / as sysdba
+2、取消audit，将初始化参数audit_trail设置为NONE
+alter system set audit_trail=none scope=spfile;
+3、然后重启数据库.
+shutdown immediate;
+sqlplus / as sysdba
+startup;
+4、删除签权数据，oracle用户登录到数据库服务器：
+sqlplus / as sysdba
+truncate table SYS.AUD$;
+
+1]. To disable the resource manager you can use the below steps. 
+
+
+++ set the current resource manager plan to null (or another plan that is not restrictive): 
+
+alter system set resource_manager_plan='' scope=both
+
+++ change the active windows to use the null resource manager plan (or other nonrestrictive plan) using: 
+
+execute dbms_scheduler.set_attribute('WEEKNIGHT_WINDOW','RESOURCE_PLAN',''); and 
+execute dbms_scheduler.set_attribute('WEEKEND_WINDOW','RESOURCE_PLAN','');
+
+For 11g, you need to change those too:
+
+execute dbms_scheduler.set_attribute('SATURDAY_WINDOW','RESOURCE_PLAN',''); 
+execute dbms_scheduler.set_attribute('SUNDAY_WINDOW','RESOURCE_PLAN','');
+execute dbms_scheduler.set_attribute('MONDAY_WINDOW','RESOURCE_PLAN',''); 
+execute dbms_scheduler.set_attribute('TUESDAY_WINDOW','RESOURCE_PLAN','');
+execute dbms_scheduler.set_attribute('WEDNESDAY_WINDOW','RESOURCE_PLAN',''); 
+execute dbms_scheduler.set_attribute('THURSDAY_WINDOW','RESOURCE_PLAN','');
+execute dbms_scheduler.set_attribute('FRIDAY_WINDOW','RESOURCE_PLAN','');
+
+++ Then, for each window_name (WINDOW_NAME from DBA_SCHEDULER_WINDOWS), run: 
+
+SQL> execute dbms_scheduler.set_attribute('<window name>','RESOURCE_PLAN','');
+
+ 
+
+
+2]. To disable SQL tunning you can use the below procedure.  
+
+BEGIN 
+DBMS_AUTO_TASK_ADMIN.DISABLE( 
+client_name => 'sql tuning advisor', 
+operation => NULL, 
+window_name => NULL); 
+END; 
+/

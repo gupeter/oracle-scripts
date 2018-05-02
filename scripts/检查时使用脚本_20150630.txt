@@ -1,0 +1,1035 @@
+﻿create pfile='/tmp/temp.ora' from spfile
+
+while [ true ] ; do ora event ; done ;
+
+1.正常awr收集
+@?/rdbms/admin/awrrpt.sql
+
+2.1 查看数据库参数
+col name format a40
+col value format a60
+set pagesize 1000
+set linesize 150
+select name,value from v$parameter where isdefault='FALSE' order by 1;
+
+2.2 显示包含隐含参数在内的参数值：
+select ksppinm, ksppstvl
+from x$ksppi x, x$ksppcv y
+where (x.indx=y.indx)
+and (translate(ksppinm,'_','#') like '%&1%');
+
+
+
+3.表空间利用率：
+col file_name for a50
+select c.TABLESPACE_NAME,c.SEGMENT_SPACE_MANAGEMENT,d.sum_MB,d.free_MB,d.use_precent,c.EXTENT_MANAGEMENT from dba_tablespaces c,
+(select b.tablespace_name,round(sum(b.bytes)/1024/1024,0) sum_MB, round(sum(nvl(a.bytes,0))/1024/1024,0) free_MB,
+round((sum(b.bytes)-sum(nvl(a.bytes,0)))/sum(b.bytes),4)*100 use_precent
+from (select tablespace_name,file_id,sum(bytes) bytes from dba_free_space group by tablespace_name,file_id ) a,
+dba_data_files b
+where a.file_id(+)=b.file_id and a.tablespace_name(+)=b.tablespace_name
+group by b.tablespace_name
+order by use_precent) d
+where c.TABLESPACE_NAME=d.TABLESPACE_NAME
+order by 5 desc;
+
+
+4.查看当前系统中的等待会话
+
+set lines 200 pages 1000;
+col sid      format 9999;
+col username format a10;
+col machine  format a15;
+col sql_id   format a13;
+col event    format a36;
+col p123     format a18;
+col state    format a18;
+col wati     format 999;
+col blse     format 9999;
+SELECT sid,
+       username,
+       machine,
+       NVL(sql_id, prev_sql_id) sql_id,
+       event,
+       p1 || '/' || p2 || '/' || p3 p123,
+       state,
+       wait_time wati,
+       last_call_et,
+       blocking_session blse
+  FROM v$session
+WHERE wait_class#<>6
+ORDER BY last_call_et desc ;
+
+
+5.每天产生日志量
+alter session set nls_date_format='YYYY-MM-DD hh24:mi:ss';
+select thread#,max(first_time) max_first_time,to_char(first_time,'YYYY-MM-DD') day,count(recid) count_number,count(recid)*200 size_mb
+from v$log_history group by thread#,to_char(first_time,'YYYY-MM-DD') order by 3,1;
+
+
+6.查看无效对象
+select owner,object_name,object_type,status from dba_objects where status <> 'VALID'
+
+
+7.查看高水位线
+select owner,table_name,blocks*8/1024 size_m, (avg_row_len*num_rows+24*INI_TRANS)/8096/blocks*100 pct
+from dba_tables where blocks<>0 and owner not in ('SYS','SYSTEM','SYSMAN','XDB') and rownum <100 and having pct >1 order by 4 desc;
+
+Select owner,table_name,blocks*8/1024 size_m, (avg_row_len*num_rows+24*INI_TRANS)/8096/blocks*100 pct
+from dba_tables
+where table_name='CM_SUBS_STATUSCHG';
+
+set linesize 258 pagesize 999
+col WASTED_PERCENT format a20
+col owner for a30
+col table_name for a30
+alter session set nls_date_format='yyyy-mm-dd hh24:mi:ss';
+SELECT owner,
+       table_name,
+       ROUND(BLOCKS * 8192 / 1024 / 1024, 2) "total_size(M)",
+       ROUND(num_rows * AVG_ROW_LEN / 1024 / 1024, 2) "used_size(M)",
+       ROUND(((BLOCKS * 8192 / 1024 / 1024) -
+             (num_rows * AVG_ROW_LEN / 1024 / 1024)),
+             2) "wasted_size(M)",
+       ROUND(ROUND(((BLOCKS * 8192 / 1024 / 1024) -
+                   (num_rows * AVG_ROW_LEN / 1024 / 1024)),
+                   2) / ROUND(BLOCKS * 8192 / 1024 / 1024, 2),
+             2) * 100 || '%' wasted_percent,
+       LAST_ANALYZED,
+       NUM_ROWS
+  FROM dba_tables
+WHERE ROUND(BLOCKS * 8192 / 1024 / 1024, 2) <> 0
+   and ROUND(ROUND(((BLOCKS * 8192 / 1024 / 1024) -
+                   (num_rows * AVG_ROW_LEN / 1024 / 1024)),
+                   2) / ROUND(BLOCKS * 8192 / 1024 / 1024, 2),
+             2) * 100 > 50
+   and ROUND(BLOCKS * 8192 / 1024 / 1024, 2) > 10
+   and owner not like '%SYS%'
+--and table_name='QLSEAIDOCDATA'
+ORDER BY 6 desc;
+
+
+查看索引碎片情况
+执行如下语句可监测索引的碎片情况：
+analyze index <索引名> validate structure online;
+select name,del_lf_rows_len,lf_rows_len,(del_lf_rows_len/lf_rows_len)*100 from index_stats;
+
+表中：索引碎片率(%) = (del_lf_rows_len/lf_rows_len)*100。
+如果索引碎片率超过20%，则Oracle认为索引碎片已经非常严重。
+
+8.查看某个过去的快照时间点中的会话的详细信息
+select SESSION_ID,SESSION_SERIAL#,USER_ID,SQL_ID,BLOCKING_SESSION,event,to_char(SAMPLE_TIME,'yyyymmdd hh24:mi:ss')
+from DBA_HIST_ACTIVE_SESS_HISTORY where snap_id=23345
+--and to_char(SAMPLE_TIME,'yyyymmdd hh24:mi:ss')>'20140402 01:30:00'
+--and to_char(SAMPLE_TIME,'yyyymmdd hh24:mi:ss')<'20140402 01:45:10'
+and instance_number=1              
+and SESSION_ID=1302
+and WAIT_CLASS<>'Idle';
+
+
+9.显示当前等待状态
+select * from
+( select event,total_waits,time_waited from v$system_event
+  where wait_class <> 'Idle' order by 3 desc
+) where rownum<=100;
+
+
+10.当前会话的v$sesstat视图结果
+select n.name,sum(s.value) from v$sesstat s, v$statename n
+where n.name like '%&stat_name%' and s.statistic#=n.statistic#
+and s.sid=(select sid from v$mystat where rownum=1)
+group by n.name;
+
+
+11.获得当前事务的undo数据信息
+select used_ublk,used_urec from v$transaction t,v$session s
+where s.sid=(select sid from v$mystat where rownum=1)
+and s.taddr=t.addr;
+
+查看死事务回滚时间--undo
+select usn, state, undoblockstotal "Total", undoblocksdone "Done", undoblockstotal-undoblocksdone "ToDo",decode(cputime,0,'unknown',sysdate+(((undoblockstotal-undoblocksdone) / (undoblocksdone / cputime)) / 86400))
+"Estimated time to complete"
+from v$fast_start_transactions;
+
+undo大小建议调整
+select a.maxlen,
+        b.undo_block_per_sec,
+        c.blocksize,
+        a.maxlen * b.undo_block_per_sec * c.blocksize / 1024 / 1024 || 'M' "估计undo的大小"
+   from (select max(t.MAXQUERYLEN) maxlen from v$undostat t) a,
+        (select max(undoblks / ((end_time - begin_time) * 3600 * 24)) undo_block_per_sec
+           from v$undostat) b,
+        (select value blocksize
+           from v$parameter
+          where name = 'db_block_size') c;
+
+select TABLESPACE_NAME,STATUS,round(sum(bytes)/1024/1024,0)  size_m from DBA_UNDO_EXTENTS group by TABLESPACE_NAME,STATUS;
+
+查看某个会话的回滚所需空间
+SELECT a.used_ublk 
+              FROM v$transaction a, v$session b
+              WHERE a.addr = b.taddr AND b.sid = <SID>;
+
+select ADDR,KTUXEUSN,KTUXESLT,KTUXESQN,KTUXESIZ
+                from x$ktuxe where  KTUXECFL ='DEAD';
+
+
+12.查询事务使用内存的多少
+select b.PGA_USED_MEM PGA_USED_MEM, b.PGA_ALLOC_MEM PGA_ALLOC_MEM,
+b.PGA_FREEABLE_MEM PGA_FREEABLE_MEM,b.PGA_MAX_MEM PGA_MAX_MEM
+from v$session a, v$process b
+where a.PADDR=b.ADDR and a.sid ='&sid'
+
+13.查看用内存大于100m的进程信息
+set line 200
+col sid for 999999
+col serial$ for a10
+col username for a20
+col machine for a20
+col program for a20
+col size_m for 999999.99
+col spid for 99999999
+select s.sid, s.serial#, s.username, s.machine, s.program,s.process, s.sql_id, p.pga_alloc_mem/1048576 size_m, p.spid
+from v$session s, v$process p where s.paddr=p.addr
+and p.pga_alloc_mem>104857600 order by 7 desc;
+
+select value/1024/1024/1024 from V$OSSTAT   where stat_name='PHYSICAL_MEMORY_BYTES';
+
+14.SQLTUNING
+variable stmt_task VARCHAR2(64);
+EXEC :stmt_task := DBMS_SQLTUNE.CREATE_TUNIN   G_TASK(sql_id => '&sqlid');
+print stmt_task
+
+exec DBMS_SQLTUNE.EXECUTE_TUNING_TASK( task_name =>:stmt_task);
+
+SET LONG 10000000 LONGCHUNKSIZE 1000000 LINESIZE 150 pagesize 0 serveroutput on size 1000000
+SELECT DBMS_SQLTUNE.REPORT_TUNING_TASK( :stmt_task) from dual;
+
+exec dbms_sqltune.accept_sql_profile(task_name => 'TASK_220529',replace => TRUE);
+
+select child_number, plan_hash_value, last_load_time from v$sql where sql_id='ft90vs7msz3vm';
+
+SELECT status,ERROR_MESSAGE,STATUS_MESSAGE,CREATED from DBA_ADVISOR_TASKS WHERE task_name = 'TASK_210869';
+
+
+使用sql profile
+10g看sql profile的内容
+select attr_val from dba_sql_profiles a, sys.sqlprof$attr b  
+  where a.signature = b.signature  
+  and a.name='SYS_SQLPROF_0158d954d210000'; 
+
+11g看sql profile中的内容
+SELECT extractValue(value(h),'.') AS hint
+   FROM sys.sqlobj$data od, sys.sqlobj$ so,
+   table(xmlsequence(extract(xmltype(od.comp_data),'/outline_data/hint'))) h
+   WHERE so.name = 'coe_am34pa13wfsrw_1838229974'
+   AND so.signature = od.signature
+   AND so.category = od.category
+   AND so.obj_type = od.obj_type
+   AND so.plan_id = od.plan_id;
+
+
+15.获取对象定义
+set lin 200 pagesize 500
+set long 99999
+set longc 99999
+select dbms_metadata.get_ddl(upper('&object_type'),upper('&object_name'),upper('&username')) from dual;
+
+--获取同义词定义
+select dbms_metadata.get_ddl('SYNONYM',upper('&object_name'),upper('&username')) from dual;
+
+--获取存储过程定义
+select dbms_metadata.get_ddl('PROCEDURE',upper('&object_name'),upper('&username')) from dual;
+
+
+16.查看使用cpu最高的语句
+set linesize 200
+col username for a10
+col event for a35
+col program for a20 truncate
+col cpu_p for 99.99
+select ta.*,round(ta.cpu_time/tb.total_cpu * 100,1) cpu_usage from
+(select s.username,s.program,s.event,s.sql_id,sum(trunc(m.CPU)) CPU_TIME,count(*) sum
+        --,sum(m.PHYSICAL_READS) P_READ,sum(LOGICAL_READS) L_READ,
+  from v$sessmetric m ,v$session s
+where ( m.PHYSICAL_READS >100
+       or m.CPU>100
+       or m.LOGICAL_READS >100)
+       and m.SESSION_ID = s.SID
+       and m.SESSION_SERIAL_NUM = s.SERIAL#
+       and s.status = 'ACTIVE'
+       and username is not null
+group by s.username,s.program,s.event,s.sql_id
+order by 5 desc) ta,(select sum(cpu) total_cpu from v$sessmetric) tb
+where rownum < 11;
+
+
+17.enqueue类的锁，转化其p1值,定位锁的mode
+select chr(bitand(P1,-16777216)/16777215) || chr(bitand(p1,16711680)/65535) "Name", bitand(P1, 65535) "mode" from dual;
+
+查看锁相关情况
+select
+decode(l.LMODE,0 ,'<==Waiter', 6,'==>Holder' ) IDENTIFIER,
+s.SID,
+s.SERIAL#,
+s.INST_ID,
+s.status,
+decode(l.TYPE,'CF' ,'Control File', 'DX','Distributed Xaction' ,'FS', 'File Set','IR', 'Instance Recovery','IS' ,'Instance State', 'IV','Library Cache Invalidation','LS', 'Log Start or Switch','MR' ,'Media Recovery','RT', 'Redo Thread','RW' ,'Row Wait', 'SQ','Sequence Number','ST', 'Disk Space Transaction','TE' ,'Extend Table', 'TM','DML' ,'TS', 'Temp Segment','TT' ,'Temp Table','TX', 'Transaction','UL' ,'PL/SQL User Lock', 'UN','User Name',l.type)  lock_type,
+decode(l.LMODE,0 ,'None', 1,'Null' ,2, 'Row-S (SS)',3 ,'Row-X (SX)',4, 'Share',5 ,'S/Row-X (SSX)', 6,'Exclusive' ,to_char(l.lmode))    hold,
+decode(l.REQUEST,0 ,'None', 1,'Null' ,2, 'Row-S (SS)',3 ,'Row-X (SX)',4, 'Share',5 ,'S/Row-X (SSX)', 6,'Exclusive' ,to_char(l.request)) requested,
+to_char(l.ID1) lock_id1,
+to_char(l.id2) lock_id2,
+l.CTIME,
+s.MODULE,
+s.process,
+s.ACTION,
+s.PROGRAM,
+s.COMMAND,
+s.TERMINAL,
+s.MACHINE,
+s.CLIENT_INFO,
+s.LOGON_TIME,
+s.LAST_CALL_ET,
+s.CLIENT_IDENTIFIER,
+s.USERNAME,
+s.OSUSER,
+s.SCHEMANAME,
+s.PADDR
+from    gv$lock l,gv$session s
+where   (l.id1,l.id2,l.TYPE) in     
+(select gl.id1,gl.id2,gl.TYPE
+from    gv$lock gl
+where request != 0 )
+AND l.sid=s.SID
+AND l.INST_ID = s.INST_ID
+ORDER BY l.id1;
+
+--检查在某对象上施加的锁
+select d.object_name,l.object_id,l.session_id,s.blocking_session,l.locked_mode
+from v$locked_object l,dba_objects d,v$session s
+where d.object_name in ('ZJROAMSCF','HZROAMSCF')
+and d.object_id=l.object_id and s.sid=l.session_id
+
+
+18. 做统计分析
+--对某个表做统计收集
+exec DBMS_STATS.GATHER_TABLE_STATS(ownname=>'T_TEST',tabname=>'TAB_TEST',ESTIMATE_PERCENT=>5,method_opt=>'for all columns size 1',cascade=>true,force=>true,degree=>8);
+exec DBMS_STATS.GATHER_TABLE_STATS(ownname=>'HZYY',tabname=>'CS_REC_RECEPTION',ESTIMATE_PERCENT=>5,method_opt=>'for all columns size 1',cascade=>true,force=>true,degree=>8,no_invalidate=>FALSE);
+method_opt中的size为1，意味着不收集直方图
+
+--对索引收集统计信息
+
+
+--对某个用户做统计收集
+exec DBMS_STATS.GATHER_SCHEMA_STATS(ownname=>'ZHZWHIS',ESTIMATE_PERCENT=>5,method_opt=>'for all columns size 1',cascade=>true,force=>true,degree=>12);
+
+--收集直方图信息
+exec dbms_stats.gather_table_stats('','',method_opt=>'for all columns size skewonly/auto/75',estimate_percent=>10);
+
+--查看直方图类型
+select column_name,number_buckets,histogram from dba_tab_col_statistics where table_name='' and columns_name=''
+
+--查看列信息
+col column_name for a25
+col density 9999999999
+select a.column_name,b.num_rows,a.num_distinct cardinality,
+       round(a.num_distinct/b.num_rows*100,2) selectivity,
+       num_nulls,density,a.histogram,a.num_buckets
+from dba_tab_col_statistics a,dba_tables b
+where a.owner=b.owner
+and a.table_name=b.table_name
+and a.owner='&owner'
+and a.table_name=upper('&table_name');
+
+
+
+19. 自动收集统计信息（11g）
+select client_name,status from dba_autotask_client;
+
+SELECT WINDOW_NAME,WINDOW_ACTIVE,AUTOTASK_STATUS,OPTIMIZER_STATS from DBA_AUTOTASK_WINDOW_CLIENTS;
+
+exec DBMS_AUTO_TASK_ADMIN.ENABLE(
+client_name => 'auto optimizer stats collection',
+operation => NULL,
+window_name => NULL);
+
+BEGIN
+DBMS_AUTO_TASK_ADMIN.DISABLE(
+client_name => 'auto optimizer stats collection'
+, operation => NULL
+, window_name => NULL
+);
+END;
+
+修改统计信息搜集的时间
+select window_name,repeat_interval,duration from dba_scheduler_windows;
+begin
+dbms_scheduler.disable(
+name=>'"SYS"."SUNDAY_WINDOW"',
+force=>true);
+end;
+/
+
+begin
+dbms_scheduler.set_attribute(
+name=>'"SYS"."SUNDAY_WINDOW"',
+attribute=>'DURATION',
+value=>numtodsinterval(240,'minute'));
+end;
+/
+
+
+begin
+dbms_scheduler.set_attribute(
+name=>'"SYS"."SUNDAY_WINDOW"',
+attribute=>'REPEAT_INTERVAL',
+value=>'freq=daily;byday=SAT;byhour=22;byminute=0; bysecond=0
+');
+end;
+/
+
+begin
+dbms_scheduler.enable(
+name=>'"SYS"."SUNDAY_WINDOW"');
+end;
+/
+
+20.查看awr中相应信息
+
+set pages 100000;
+select distinct(o.owner), o.object_name, o.object_id, o.object_type, o.subobject_name,
+CASE
+  WHEN o.object_type = 'INDEX PARTITION' THEN to_char(si.savtime)
+  WHEN o.object_type = 'TABLE PARTITION' THEN to_char(st.savtime)
+  WHEN o.object_type = 'INDEX' THEN to_char(si.savtime)
+  WHEN o.object_type = 'TABLE' THEN to_char(st.savtime)
+  ELSE 'NOTHING'
+END AS "nsavtime"
+from dba_objects o, sys.WRI$_OPTSTAT_IND_HISTORY si, sys.WRI$_OPTSTAT_TAB_HISTORY st
+where (o.owner, o.object_name) in (
+select owner, index_name as object_name from dba_indexes
+    where table_owner=('&&OWNER')
+    and table_name in ('&&TABLE_NAME')
+   union
+    select owner, table_name as object_name from dba_tables
+    where owner=('&OWNER')
+    and table_name in ('&TABLE_NAME'))
+and (o.object_id=si.obj#
+or o.object_id=st.obj#)
+--and si.savtime between  to_date('06-JAN-2014:10:30:00','DD-MON-YYYY:HH24:MI:SS')  and to_date('06-JAN-2014:16:10:00','DD-MON-YYYY:HH24:MI:SS')
+--and st.savtime between to_date('06-JAN-2014:10:30:00','DD-MON-YYYY:HH24:MI:SS')  and to_date('06-JAN-2014:16:10:00','DD-MON-YYYY:HH24:MI:SS')
+order by 6,4,2
+
+
+
+21. 删除某个大表记录的存储过程
+declare
+type ridArray is table of rowid index by binary_integer;
+vRowid ridArray;
+cursor cur_delete is select rowid from WRI$_OPTSTAT_HISTGRM_HISTORY where savtime like '%APR%' ;
+begin
+open cur_delete;
+loop
+  fetch cur_delete bulk collect into vRowid limit 5000;
+  forall row in 1..vRowid.count()
+     delete from WRI$_OPTSTAT_HISTGRM_HISTORY where rowid= vRowid(row) and savtime like '%APR%';
+  commit;
+  exit when cur_delete%notfound;
+end loop;
+close cur_delete;
+exception
+when others then
+   dbms_output.put_line('Error code'||SQLCODE||';'||substr(SQLERRM,1,64));
+END;
+
+
+22. 替换换行符
+cat NMS_ODS_NDB4_vmstat_14.05.04.0800.dat | sed 'N;s/2014\n/2014/g' | awk '{print $5"   "$23}'
+
+23. rman多节点归档删除
+#!/bin/bash
+ORACLE_HOME=/u01/app/oracle/product/10.2.0/db_1
+ORACLE_SID=rmshare21
+PATH=$PATH:$ORACLE_HOME/bin
+export ORACLE_HOME ORACLE_SID NLS_LANG PATH
+
+rman target / << EOF
+run {
+allocate channel ch1 type disk connect 'sys/oracle!2@rmshare21';
+allocate channel ch2 type disk connect 'sys/oracle!2@rmshare22';
+crosscheck archivelog all;
+delete expired archivelog all;
+delete noprompt archivelog until time 'sysdate-8/24';
+}
+exit
+EOF
+
+
+
+24. 查看锁表情况--lock
+select d.object_name,l.object_id,l.session_id,s.blocking_session,l.locked_mode
+from v$locked_object l,dba_objects d,v$session s
+where d.object_name in ('ZJROAMSCF','HZROAMSCF')
+and d.object_id=l.object_id and s.sid=l.session_id
+
+25.查看临时表空间的使用情况--temp
+select username,segtype,SQL_ID,sum(blocks) from V$TEMPSEG_USAGE where TABLESPACE='&tsn' group by username,segtype,SQL_ID order by 4 desc;
+具体到sql的使用情况，不过sql_id不一定准，可能指的是前一条sql
+(这条sql出来的是真正临时表空间的使用情况）
+
+
+查看当前已经分配的临时表空间
+SELECT D.TABLESPACE_NAME,
+         SPACE || 'M' "SUM_SPACE(M)",
+         BLOCKS SUM_BLOCKS,
+         USED_SPACE || 'M' "USED_SPACE(M)",
+         ROUND(NVL(USED_SPACE, 0) / SPACE * 100, 2) || '%' "USED_RATE(%)",
+         NVL(FREE_SPACE, 0) || 'M' "FREE_SPACE(M)"
+    FROM (SELECT TABLESPACE_NAME,
+                 ROUND(SUM(BYTES) / (1024 * 1024), 2) SPACE,
+                 SUM(BLOCKS) BLOCKS
+            FROM DBA_TEMP_FILES
+           GROUP BY TABLESPACE_NAME) D,
+         (SELECT TABLESPACE_NAME,
+                 ROUND(SUM(BYTES_USED) / (1024 * 1024), 2) USED_SPACE,
+                 ROUND(SUM(BYTES_FREE) / (1024 * 1024), 2) FREE_SPACE
+            FROM V$TEMP_SPACE_HEADER
+           GROUP BY TABLESPACE_NAME) F
+   WHERE D.TABLESPACE_NAME = F.TABLESPACE_NAME(+)
+   ORDER BY 1;
+  
+计算临时表空间使用率  
+For dictionary managed temporary tablespace :针对字典管理临时表空间:
+select (s.tot_used_blocks/f.total_blocks)*100 as "percent used"
+from (select sum(used_blocks) tot_used_blocks from v$sort_segment where tablespace_name='TEMP') s,
+(select sum(blocks) total_blocks from dba_data_files where tablespace_name='TEMP') f;
+
+For locally managed temporary tablespace:针对本地管理表空间:
+select (s.tot_used_blocks/f.total_blocks)*100 as "percent used"
+from (select sum(used_blocks) tot_used_blocks from v$sort_segment where tablespace_name='TEMP') s,
+(select sum(blocks) total_blocks from dba_temp_files where tablespace_name='TEMP') f;   
+ 
+26.查询执行时间长的语句--long time
+select /*+rule*/ p.spid,s.sid,s.serial#,s.sql_id,s.username,s.machine,s.terminal,s.program
+from v$process p,v$session s
+where s.paddr=p.addr and s.username<>'SYS' and s.type='USER'
+and s.saddr in (select t.ses_addr from v\$transaction t where to_date(t.start_time, 'mm/dd/yy hh24:mi:ss') < sysdate - 5/24);
+
+27. 共享池内存碎片
+select  'sga heap('||KSMCHIDX||',0)'sga_heap,ksmchcom ChunkComment,
+     decode(round(ksmchsiz/1000),0,'0-1K', 1,'1-2K', 2,'2-3K',3,'3-4K',4,'4-5K',5,'5-6k',6,'6-7k',7,'7-8k',8,'8-9k', 9,'9-10k','> 10K') "Size",
+     count(*), ksmchcls "Status", sum(ksmchsiz) "Bytes"
+from x$ksmsp
+     where KSMCHCOM = 'free memory'
+group by 'sga heap('||KSMCHIDX||',0)',ksmchcom, ksmchcls, decode(round(ksmchsiz/1000),0,'0-1K', 1,'1-2K', 2,'2-3K',3,'3-4K',4,'4-5K',5,'5-6k',6,'6-7k',7,'7-8k',8,'8-9k', 9,'9-10k','> 10K') ;
+
+
+select ksmchidx,ksmchdur,
+case
+   when ksmchsiz < 1672 then trunc((ksmchsiz-32)/8)
+   when ksmchsiz < 4120 then trunc((ksmchsiz-7298)/48)
+   when ksmchsiz <  8216 then 250
+   when ksmchsiz < 16408 then 251
+   when ksmchsiz < 32792 then 252
+   when ksmchsiz < 65560 then 253
+   when ksmchsiz >=65560 then 253
+end bucket,
+sum(ksmchsiz) free_space,count(*) free_chunks,trunc(avg(ksmchsiz)) average_size,max(ksmchsiz) biggest
+from
+sys.x$ksmsp where inst_id=userenv('Instance') and ksmchcls='free'
+group by
+case
+   when ksmchsiz < 1672 then trunc((ksmchsiz-32)/8)
+   when ksmchsiz < 4120 then trunc((ksmchsiz-7298)/48)
+   when ksmchsiz <  8216 then 250
+   when ksmchsiz < 16408 then 251
+   when ksmchsiz < 32792 then 252
+   when ksmchsiz < 65560 then 253
+   when ksmchsiz >=65560 then 253
+end ,ksmchidx,ksmchdur order by ksmchidx,ksmchdur
+
+
+查看sga，pga使用情况
+select name,total,round(total-free,2) used, round(free,2) free,round((total-free)/total*100,2) pctused from
+(select 'SGA' name,(select sum(value/1024/1024) from v$sga) total,
+(select sum(bytes/1024/1024) from v$sgastat where name='free memory')free from dual)
+union
+select name,total,round(used,2)used,round(total-used,2)free,round(used/total*100,2)pctused from (
+select 'PGA' name,(select value/1024/1024 total from v$pgastat where name='aggregate PGA target parameter')total,
+(select value/1024/1024 used from v$pgastat where name='total PGA allocated')used from dual)
+  union
+select name,round(total,2) total,round((total-free),2) used,round(free,2) free,round((total-free)/total*100,2) pctused from (
+select 'Shared pool' name,(select sum(bytes/1024/1024) from v$sgastat where pool='shared pool')total,
+(select bytes/1024/1024 from v$sgastat where name='free memory' and pool='shared pool') free from dual)
+union
+select name,round(total,2)total,round(total-free,2) used,round(free,2) free,round((total-free)/total,2) pctused from (
+select 'Default pool' name,( select a.cnum_repl*(select value from v$parameter where name='db_block_size')/1024/1024 total from x$kcbwds a, v$buffer_pool p
+  where a.set_id=p.LO_SETID and p.name='DEFAULT' and p.block_size=(select value from v$parameter where name='db_block_size')) total,
+(select a.anum_repl*(select value from v$parameter where name='db_block_size')/1024/1024 free from x$kcbwds a, v$buffer_pool p
+where a.set_id=p.LO_SETID and p.name='DEFAULT' and p.block_size=(select value from v$parameter where name='db_block_size')) free from dual)
+union
+  select name,nvl(round(total,2),0)total,nvl(round(total-free,2),0) used,nvl(round(free,2),0) free,nvl(round((total-free)/total,2),0) pctused from (
+select 'KEEP pool' name,(select a.cnum_repl*(select value from v$parameter where name='db_block_size')/1024/1024 total from x$kcbwds a, v$buffer_pool p
+  where a.set_id=p.LO_SETID and p.name='KEEP' and p.block_size=(select value from v$parameter where name='db_block_size')) total,
+(select a.anum_repl*(select value from v$parameter where name='db_block_size')/1024/1024 free from x$kcbwds a, v$buffer_pool p
+where a.set_id=p.LO_SETID and p.name='KEEP' and p.block_size=(select value from v$parameter where name='db_block_size')) free from dual)
+union
+select name,nvl(round(total,2),0)total,nvl(round(total-free,2),0) used,nvl(round(free,2),0) free,nvl(round((total-free)/total,2),0) pctused from (
+select 'RECYCLE pool' name,( select a.cnum_repl*(select value from v$parameter where name='db_block_size')/1024/1024 total from x$kcbwds a, v$buffer_pool p
+  where a.set_id=p.LO_SETID and p.name='RECYCLE' and p.block_size=(select value from v$parameter where name='db_block_size')) total,
+(select a.anum_repl*(select value from v$parameter where name='db_block_size')/1024/1024 free from x$kcbwds a, v$buffer_pool p
+where a.set_id=p.LO_SETID and p.name='RECYCLE' and p.block_size=(select value from v$parameter where name='db_block_size')) free from dual)
+union
+select name,nvl(round(total,2),0)total,nvl(round(total-free,2),0) used,nvl(round(free,2),0) free,nvl(round((total-free)/total,2),0) pctused from(
+select 'DEFAULT 16K buffer cache' name,(select a.cnum_repl*16/1024 total from x$kcbwds a, v$buffer_pool p
+  where a.set_id=p.LO_SETID and p.name='DEFAULT' and p.block_size=16384) total,
+  (select a.anum_repl*16/1024 free from x$kcbwds a, v$buffer_pool p
+where a.set_id=p.LO_SETID and p.name='DEFAULT' and p.block_size=16384) free from dual)
+union
+select name,nvl(round(total,2),0)total,nvl(round(total-free,2),0) used,nvl(round(free,2),0) free,nvl(round((total-free)/total,2),0) pctused from(
+select 'DEFAULT 32K buffer cache' name,(select a.cnum_repl*32/1024 total from x$kcbwds a, v$buffer_pool p
+  where a.set_id=p.LO_SETID and p.name='DEFAULT' and p.block_size=32768) total,
+  (select a.anum_repl*32/1024 free from x$kcbwds a, v$buffer_pool p
+where a.set_id=p.LO_SETID and p.name='DEFAULT' and p.block_size=32768) free from dual)
+union
+select name,total,total-free used,free, (total-free)/total*100 pctused from (
+select 'Java Pool' name,(select sum(bytes/1024/1024) total from v$sgastat where pool='java pool' group by pool)total,
+( select bytes/1024/1024 free from v$sgastat where pool='java pool' and name='free memory')free from dual)
+union
+select name,Round(total,2),round(total-free,2) used,round(free,2) free, round((total-free)/total*100,2) pctused from (
+select 'Large Pool' name,(select sum(bytes/1024/1024) total from v$sgastat where pool='large pool' group by pool)total,
+( select bytes/1024/1024 free from v$sgastat where pool='large pool' and name='free memory')free from dual)
+order by pctused desc;
+
+28.查看坏块
+识别坏块
+RMAN> backup validate check logical database;  11g可以去掉backup
+
+监控validate的运行情况
+select sid, serial#, context, sofar, totalwork,round(sofar/totalwork*100,2) "%_complete"
+from v$session_longops
+where opname like 'RMAN%'
+  and opname not like '%aggregate%'
+  and totalwork != 0
+  and sofar <> totalwork;
+
+并行校验一个数据文件
+backup validate check logical datafile 5 SECTION SIZE 1024M;
+
+11g以上用于检查特定block
+validate check logical datafile 1 BLOCK 5 TO 20;
+
+坏块匹配的对应段
+set pagesize 2000
+set linesize 250
+SELECT e.owner, e.segment_type, e.segment_name, e.partition_name, c.file#
+     , greatest(e.block_id, c.block#) corr_start_block#
+     , least(e.block_id+e.blocks-1, c.block#+c.blocks-1) corr_end_block#
+     , least(e.block_id+e.blocks-1, c.block#+c.blocks-1)
+       - greatest(e.block_id, c.block#) + 1 blocks_corrupted
+     , null description
+  FROM dba_extents e, v$database_block_corruption c
+WHERE e.file_id = c.file#
+   AND e.block_id <= c.block# + c.blocks - 1
+   AND e.block_id + e.blocks - 1 >= c.block#
+UNION
+SELECT s.owner, s.segment_type, s.segment_name, s.partition_name, c.file#
+     , header_block corr_start_block#
+     , header_block corr_end_block#
+     , 1 blocks_corrupted
+     , 'Segment Header' description
+  FROM dba_segments s, v$database_block_corruption c
+WHERE s.header_file = c.file#
+   AND s.header_block between c.block# and c.block# + c.blocks - 1
+UNION
+SELECT null owner, null segment_type, null segment_name, null partition_name, c.file#
+     , greatest(f.block_id, c.block#) corr_start_block#
+     , least(f.block_id+f.blocks-1, c.block#+c.blocks-1) corr_end_block#
+     , least(f.block_id+f.blocks-1, c.block#+c.blocks-1)
+       - greatest(f.block_id, c.block#) + 1 blocks_corrupted
+     , 'Free Block' description
+  FROM dba_free_space f, v$database_block_corruption c
+WHERE f.file_id = c.file#
+   AND f.block_id <= c.block# + c.blocks - 1
+   AND f.block_id + f.blocks - 1 >= c.block#
+order by file#, corr_start_block#;
+
+
+29.dataguard 主备检查
+select process,status,thread#,sequence#,block#,blocks from v$managed_standby;
+容灾端进行
+
+生产端进行，检查相应文件的错误问题
+select DEST_ID,STATUS ,error from v$archive_dest;
+
+select message from v$dataguard_status;
+
+
+
+30.查看执行计划的变化情况
+select a.INSTANCE_NUMBER,a.snap_id,a.sql_id,a.plan_hash_value,b.begin_interval_time
+from dba_hist_sqlstat a, dba_hist_snapshot b
+where sql_id ='&1'
+and a.snap_id = b.snap_id
+order by instance_number,begin_interval_time  desc;
+
+固定执行计划
+@coe_xfr_sql_profile.sql cdwjdd67x27mh
+输入sql_id和plan hash value
+
+
+查看历史执行计划
+set lines 150 pages 150
+col BEGIN_INTERVAL_TIME for a23
+col PLAN_HASH_VALUE for 9999999999
+col date_time for a30
+col snap_id heading 'SnapId'
+col executions_delta heading "No. of exec"
+col sql_profile heading "SQL|Profile" for a7
+col date_time heading 'Date time'
+col avg_lio heading 'LIO/exec' for 99999999999.99
+col avg_cputime_s heading 'CPUTIM/exec' for 9999999.99
+col avg_etime_s heading 'ETIME/exec' for 9999999.99
+col avg_pio heading 'PIO/exec' for 9999999.99
+col avg_row heading 'ROWs/exec' for 9999999.99
+SELECT distinct
+s.snap_id ,
+PLAN_HASH_VALUE,
+to_char(s.BEGIN_INTERVAL_TIME,'mm/dd/yy_hh24mi')|| to_char(s.END_INTERVAL_TIME,'_hh24mi') Date_Time,
+SQL.executions_delta,
+SQL.buffer_gets_delta/decode(nvl(SQL.executions_delta,0),0,1,SQL.executions_delta) avg_lio,
+--SQL.ccwait_delta,
+(SQL.cpu_time_delta/1000000)/decode(nvl(SQL.executions_delta,0),0,1,SQL.executions_delta) avg_cputime_s ,
+(SQL.elapsed_time_delta/1000000)/decode(nvl(SQL.executions_delta,0),0,1,SQL.executions_delta) avg_etime_s,
+SQL.DISK_READS_DELTA/decode(nvl(SQL.executions_delta,0),0,1,SQL.executions_delta) avg_pio,
+SQL.rows_processed_total/decode(nvl(SQL.executions_delta,0),0,1,SQL.executions_delta) avg_row
+--,SQL.sql_profile
+FROM
+dba_hist_sqlstat SQL,
+dba_hist_snapshot s
+WHERE
+SQL.instance_number =(select instance_number from v$instance)
+and SQL.dbid =(select dbid from v$database)
+and s.snap_id = SQL.snap_id
+AND sql_id in ('&SQLID') order by s.snap_id;
+
+查看执行计划发生变化的sql
+set linesize 2000
+set pagesize 20000
+with A as (
+SELECT
+SQL.sql_id sqlid,
+SQL.PLAN_HASH_VALUE,
+to_char(s.BEGIN_INTERVAL_TIME,'mm/dd/yy') Date_Time,
+sum(SQL.executions_delta) executions_delta,
+avg(SQL.buffer_gets_delta/decode(nvl(SQL.executions_delta,0),0,1,SQL.executions_delta)) avg_lio,
+avg((SQL.cpu_time_delta/1000000)/decode(nvl(SQL.executions_delta,0),0,1,SQL.executions_delta)) avg_cputime_s ,
+avg((SQL.elapsed_time_delta/1000000)/decode(nvl(SQL.executions_delta,0),0,1,SQL.executions_delta)) avg_etime_s,
+avg(SQL.DISK_READS_DELTA/decode(nvl(SQL.executions_delta,0),0,1,SQL.executions_delta)) avg_pio,
+avg(SQL.rows_processed_total/decode(nvl(SQL.executions_delta,0),0,1,SQL.executions_delta)) avg_row
+FROM
+dba_hist_sqlstat SQL,
+dba_hist_sql_plan spl,
+dba_hist_snapshot s
+WHERE
+SQL.dbid =(select dbid from v$database)
+and sql.sql_id=spl.sql_id
+and spl.object_owner not in ('SYS','SYSTEM','DBADM','DBMGR','SYSMAN')
+and s.snap_id = SQL.snap_id
+and s.BEGIN_INTERVAL_TIME between trunc(sysdate-1) and trunc(sysdate)
+and SQL.PLAN_HASH_VALUE <> 0
+group by SQL.sql_id,SQL.PLAN_HASH_VALUE,to_char(s.BEGIN_INTERVAL_TIME,'mm/dd/yy'))
+select sqlid,PLAN_HASH_VALUE,Date_Time,executions_delta,trunc(avg_lio),trunc(avg_cputime_s),trunc(avg_etime_s),trunc(avg_pio),
+trunc(avg_row),sysdate
+from A where sqlid in (select sqlid from A group by sqlid having count(*) > 1)
+order by sqlid;
+
+31.分布式事务锁查询
+To find the user name and the SQL text, we need to join v$transaction, v$session and v$sqlarea as follows:
+
+select a.sql_text, s.osuser, s.username
+from v$transaction t, v$session s, v$sqlarea a where s.taddr = t.addr
+and a.address = s.prev_sql_addr
+and t.xidusn = <first-part-of -transaction-ID>
+and t.xidslot =<second-part-of -transaction-ID>
+and t.xidsqn = <third-part-of -transaction-ID>;
+
+For example if your transaction ID in dba_2pc_pending is 1.25.589367, the syntax will be:
+
+select a.sql_text, s.osuser, s.username
+from v$transaction t, v$session s, v$sqlarea a where s.taddr = t.addr
+and a.address = s.prev_sql_addr
+and t.xidusn = 1
+and t.xidslot = 25
+and t.xidsqn = 589367;
+
+
+32. TX
+select w.holding_session,  
+           s1.username holding_user,  
+          q1.sql_text holding_sql  
+      from dba_waiters w,  
+           v$session   s1,  
+           v$open_cursor  q1,  
+           v$locked_object l1,  
+           dba_objects o1  
+     where w.holding_session = s1.sid  
+      and s1.sid = q1.sid(+)  
+      and l1.session_id = s1.sid  
+      and l1.object_id = o1.object_id  
+      and (upper(q1.sql_text) like '%DELETE%' or upper(q1.sql_text) like '%UPDATE%')  
+      and upper(q1.sql_text) like '%'||o1.object_name||'%';
+
+查询当前状态下的堵塞源	  
+select (select username from v$session where sid=a.sid) blocker,a.sid, 'is blocking', (select username from v$session where sid=b.sid) blockee, b.sid   
+ from v$lock a,v$lock b  where a.block=1 and b.request>0 and a.id1=b.id1 and a.id2=b.id2;
+ 
+ 
+33. 寻找热点块
+找热点块
+SELECT * FROM (SELECT addr,ts#,file#,dbarfil,dbablk,tch FROM x$bh ORDER BY tch DESC)
+WHERE ROWNUM < 11;
+
+根据热点块找热点对象
+select owner, segment_name, partition_name, tablespace_name
+from dba_extents
+where relative_fno = 上面的dbarfil
+and 上面的dbablk between block_id and block_id + blocks - 1;
+
+找访问热点的sql
+select * from (select
+    count(*),
+    sql_id,
+    nvl(o.object_name,ash.current_obj#) objn,
+    substr(o.object_type,0,10) otype,CURRENT_FILE# fn,
+         CURRENT_BLOCK# blockn
+   from  v$active_session_history ash
+       , all_objects o
+   where event like 'latch: cache buffers chains'
+     and o.object_id (+)= ash.CURRENT_OBJ#
+   group by sql_id, current_obj#, current_file#,current_block#, o.object_name,o.object_type
+   order by  count(*) desc )where rownum <=10;
+  
+34. latch相关sql
+SELECT name, gets, misses, immediate_gets, immediate_misses,
+     Decode(gets,0,0,misses/gets*100) ratio1,
+     Decode(immediate_gets+immediate_misses,0,0,
+     immediate_misses/(immediate_gets+immediate_misses)*100) ratio2
+     FROM v$latch WHERE name IN ('redo allocation', 'redo copy');   
+
+NAME                                                                   GETS MISSES     IMMEDIATE_GETS IMMEDIATE_MISSES RATIO1     RATIO2
+---------------------------------------------------------------- ---------- ---------- -------------- ---------------- ---------- ----------
+redo copy                                                               118          0     6998681211 2044253                   0 .029200588
+redo allocation                                                   102225783   53376050     6935486259 423408264        52.2138823 5.75369388     
+
+select name,latch#,child#,gets,misses from v$latch_children where name = 'redo allocation';
+NAME                                                                                 LATCH#      CHILD#           GETS        MISSES
+---------------------------------------------------------------- ---------- ---------- ---------- ----------
+redo allocation 187 3 32791620 17602676
+redo allocation 187 2 34907678 18785358
+redo allocation 187 1 34716045 17129150
+
+35.rman查看备份脚执行情况
+set lines 180
+col input_bytes_display for a40
+col output_bytes_display  for a40
+select input_type,status,start_time,end_time,input_bytes_display,output_bytes_display from V$RMAN_BACKUP_JOB_DETAILS;
+
+select sid, serial#, context, sofar, totalwork,round(sofar/totalwork*100,2) "%_complete"
+from v$session_longops
+where opname like 'RMAN%'
+  and opname not like '%aggregate%'
+  and totalwork != 0
+  and sofar <> totalwork
+
+36.查看日志切换频率
+单机查看每天日志产生量
+select max (first_time) max_first_time,
+to_char (first_time, 'yyyy-mm-dd') day,
+count (recid) count_number,
+count (recid) * 200 size_mb
+from v$log_history
+group by to_char (first_time, 'yyyy-mm-dd')
+order by 1;
+
+集群查看每个节点每天日志产生量
+select thread#,max (first_time) max_first_time,
+to_char (first_time, 'yyyy-mm-dd') day,
+count (recid) count_number,
+count (recid) * 200 size_mb
+from v$log_history
+group by thread#,to_char (first_time, 'yyyy-mm-dd')
+order by 1;
+
+
+37. 查看某个时间段的情况
+--查看某时间点等待事件情况
+select  EVENT,count(*) from DBA_HIST_ACTIVE_SESS_HISTORY where snap_id=60163 
+and to_char(SAMPLE_TIME,'yyyymmdd hh24:mi:ss')>='20100512 09:03:44' 
+and to_char(sample_time,'yyyymmdd hh24:mi:ss')<='20100512 13:35:00'
+and WAIT_CLASS<>'Idle'
+group by event
+order by 2;
+
+--查看某时间点详细信息
+select to_char(a.SAMPLE_TIME,'yyyy-mm-dd hh24:mi:ss') sample_time,
+c.username,
+a.SESSION_ID,
+a.SESSION_SERIAL#,
+b.SQL_TEXT
+from DBA_HIST_ACTIVE_SESS_HISTORY a,DBA_HIST_SQLTEXT b,dba_users c
+where a.SQL_ID=b.SQL_ID
+and a.user_id=c.user_id
+--and c.username='GZYY'
+and a.sql_id='gmht32ttba3j1'
+and to_char(sample_time,'yyyymmdd hh24:mi:ss')>='20150503 11:11:59'
+and to_char(sample_time,'yyyymmdd hh24:mi:ss')<='20150503 12:25:42';
+
+38. 验证升级过程中某脚本是否执行过
+SELECT * FROM registry$history where ID =
+
+39. 查看数据库组件
+select comp_id,comp_name,version,status from dba_registry;
+v$option
+
+
+40.9i 看执行计划
+set linesize 200
+set pagesize 2000
+select '| Operation                         |Object Name                    |  Rows | Bytes|   Cost |'
+as "Explain Plan in library cache:" from dual
+union all
+select rpad('| '||substr(lpad(' ',1*(depth-1))||operation||
+       decode(options, null,'',' '||options), 1, 35), 36, ' ')||'|'||
+       rpad(decode(id, 0, '----------------------------',
+       substr(decode(substr(object_name, 1, 7), 'SYS_LE_', null, object_name)
+       ||' ',1, 30)), 31, ' ')||'|'|| lpad(decode(cardinality,null,'  ',
+       decode(sign(cardinality-1000), -1, cardinality||' ',
+       decode(sign(cardinality-1000000), -1, trunc(cardinality/1000)||'K',
+       decode(sign(cardinality-1000000000), -1, trunc(cardinality/1000000)||'M',
+       trunc(cardinality/1000000000)||'G')))), 7, ' ') || '|' ||
+       lpad(decode(bytes,null,' ',
+       decode(sign(bytes-1024), -1, bytes||' ',
+       decode(sign(bytes-1048576), -1, trunc(bytes/1024)||'K',
+       decode(sign(bytes-1073741824), -1, trunc(bytes/1048576)||'M',
+       trunc(bytes/1073741824)||'G')))), 6, ' ') || '|' ||
+       lpad(decode(cost,null,' ', decode(sign(cost-10000000), -1, cost||' ',
+       decode(sign(cost-1000000000), -1, trunc(cost/1000000)||'M',
+       trunc(cost/1000000000)||'G'))), 8, ' ') || '|' as "Explain plan"
+  from v$sql_plan sp
+ where sp.hash_value=&hash_value;
+ 
+ 9i 看执行计划
+set linesize 200
+set pagesize 2000
+select '| Operation                         |Object Name                    |  Rows | Bytes|   Cost |'
+as "Explain Plan in library cache:" from dual
+union all
+select rpad('| '||substr(lpad(' ',1*(depth-1))||operation||
+       decode(options, null,'',' '||options), 1, 35), 36, ' ')||'|'||
+       rpad(decode(id, 0, '----------------------------',
+       substr(decode(substr(object_name, 1, 7), 'SYS_LE_', null, object_name)
+       ||' ',1, 30)), 31, ' ')||'|'|| lpad(decode(cardinality,null,'  ',
+       decode(sign(cardinality-1000), -1, cardinality||' ',
+       decode(sign(cardinality-1000000), -1, trunc(cardinality/1000)||'K',
+       decode(sign(cardinality-1000000000), -1, trunc(cardinality/1000000)||'M',
+       trunc(cardinality/1000000000)||'G')))), 7, ' ') || '|' ||
+       lpad(decode(bytes,null,' ',
+       decode(sign(bytes-1024), -1, bytes||' ',
+       decode(sign(bytes-1048576), -1, trunc(bytes/1024)||'K',
+       decode(sign(bytes-1073741824), -1, trunc(bytes/1048576)||'M',
+       trunc(bytes/1073741824)||'G')))), 6, ' ') || '|' ||
+       lpad(decode(cost,null,' ', decode(sign(cost-10000000), -1, cost||' ',
+       decode(sign(cost-1000000000), -1, trunc(cost/1000000)||'M',
+       trunc(cost/1000000000)||'G'))), 8, ' ') || '|' as "Explain plan"
+  from v$sql_plan sp
+ where sp.hash_value=&hash_value;
+ 
+41.三表关联脚本
+set linesize 500
+set pagesize 999
+set feedback on
+set serveroutput on
+set long 999999
+select sql_id,sql_text from dba_hist_sqltext where sql_id in (select pl.sql_id 
+from
+dba_hist_sqlstat st,dba_hist_snapshot snap,dba_hist_sql_plan  pl
+where 
+st.buffer_gets_delta/decode(nvl(st.executions_delta,0),0,1,st.executions_delta)>1000000
+and st.sql_id=pl.sql_id
+and st.snap_id=snap.snap_id
+and to_char(snap.begin_interval_time,'hh24:mi')> '08:00' 
+and to_char(snap.end_interval_time,'hh24:mi')< '20:00'
+and snap.begin_interval_time>sysdate-7
+and  pl.object_type='TABLE' 
+group by pl.sql_id having count(distinct pl.object_name)>=3);
+
+
+42.dg相关操作
+alter database recover managed standby database cancel;
+alter database open read only ;
+alter database recover managed standby database using current logfile disconnect from session;
+alter database recover managed standby database disconnect from session;
+
+
+43.表空间扩容
+select sum(a.bytes/1024/1024/1024) from dba_data_files a,v$datafile b where a.file_id=b.file# and creation_time>'2014-03- 19'; 
+
+
+44.查
+select * from v$open_cursor
+   where sid in (1299,4420,1748,3142,188,2077,2228,1946,1306,741,2634,2491,3598)
+   and sql_text like '%update%';
+   
+45.检查索引异常的状态
+select i.obj#, i.flags, u.name, o.name, o.type# from sys.obj$ o, sys.user$ u, sys.ind_online$ i 
+where (bitand(i.flags, 256) = 256 or bitand(i.flags, 512) = 512) and (not((i.type# = 9) and bitand(i.flags,8) = 8)) and 
+ o.obj#=i.obj# and o.owner# = u.user#;    
+
+
+46.cpict_kill_session包
+  select 'exec system.cpicit_kill_session('||sid||','||serial#||');' from v$session where prev_sql_id='9w7rggugutg5z' and status='INACTIVE'
+
+
+47. latch row cache objects
+
+找row cache object的问题源头
+select KQRSTTXT parameter,KQRSTCID cache#,KQRSTCLN lchild,KQRSTGRQ dcgets,l.gets,l.misses from x$kqrst,v$latch_children l where
+ l.addr='07000005D6CC3ED0' and l.child#=KQRSTCLN order by 1,2
+
+
+48  绑定变量
+---列出指针缓存命中率,软解析率和硬解析率
+col cursor_cache_hits format a20 truncate;
+col soft_parses format a20 truncate;
+col hard_parses format a20 truncate;
+select
+  to_char(100 * sess / calls, '9999990.00') || '%' cursor_cache_hits,
+  to_char(100 * (calls - sess - hard) / calls, '999990.00') || '%' soft_parses,
+  to_char(100 * hard / calls, '999990.00') || '%' hard_parses
+from
+  ( select value calls from v$sysstat where name = 'parse count (total)' ),
+  ( select value hard  from v$sysstat where name = 'parse count (hard)' ),
+ ( select value sess  from v$sysstat where name = 'session cursor cache hits' );   
+
+-----查看没有使用绑定的sql
+SELECT sql_text
+  FROM v$sqlarea
+ WHERE executions < 5
+ ORDER BY UPPER(sql_text);
+
+查看没有使用绑定变量的语句
+with force_matches as
+ (select force_matching_signature, --表明在force模式下，游标共享能够使用的语句（当前非共享）
+         count(*) cnt,max(sql_id || child_number) max_sql_child,
+         dense_rank() over(order by count(*) desc) ranking from v$sql
+   where force_matching_signature <> 0
+     and parsing_schema_name not in ('sys','system')
+   group by force_matching_signature
+  having count(*) > 40)            ------不能称为执行次数，应该叫变种语句超过100次
+select parsing_schema_name schema, cnt, sql_id, sql_text,MODULE     ---若是添加sql_fulltext 则速度慢的要死
+  from v$sql a join force_matches
+  on (sql_id || child_number = max_sql_child)
+ --where ranking <= 20
+ order by  cnt desc,1 desc;
+
