@@ -1,3 +1,4 @@
+add line test
 set timing on;
 set linesize 400;
 set pagesize 999;
@@ -6,30 +7,30 @@ select sql_id,spid from v$process a,v$session b where a.addr=b.paddr and sid in 
 
 select sql_id,spid from v$process a,v$session b where a.addr=b.paddr and sid=4756
 
---ÉèÖÃevent£¨ora£©
+--è®¾ç½®eventï¼ˆoraï¼‰
 alter system set events='942 trace name errorstack forever,level 3' ;
 alter system set events='942 trace name errorstack off';
 
---ÉèÖÃevent ²é¿´control
+--è®¾ç½®event æŸ¥çœ‹control
 oradebug setospid 8944
 oradebug unlimit
 oradebug event 942 trace name errorstack level 3
 oradebug dump controlf 3
 oradebug close_trace
 
---²é¿´¶Ë¿Ú
+--æŸ¥çœ‹ç«¯å£
 netstat -tnlp
 
---²é¿´µ±Ç°sessionºÍsystemÉèÖÃevent
+--æŸ¥çœ‹å½“å‰sessionå’Œsystemè®¾ç½®event
 oradebug setmypid
 oradebug eventdump session;
-»ò
+æˆ–
 oradebug eventdump system;
 
----²é¿´×î½üÒ»´Îcheckpoint
+---æŸ¥çœ‹æœ€è¿‘ä¸€æ¬¡checkpoint
 select dbid,to_char(checkpoint_change#) from v$database;
 
----²é¿´tempÊµ¼ÊÊ¹ÓÃ¶àÉÙ
+---æŸ¥çœ‹tempå®é™…ä½¿ç”¨å¤šå°‘
 select * from gv$temp_extent_pool
 
 Select f.tablespace_name,
@@ -45,29 +46,29 @@ Select f.tablespace_name,
  group by f.tablespace_name;
 
 SELECT se.username,
-¡¡¡¡sid,
-¡¡¡¡serial#,
-¡¡¡¡sql_address,
-¡¡¡¡machine,
-¡¡¡¡program,
-¡¡¡¡tablespace,
-¡¡¡¡segtype,
-¡¡¡¡contents
-¡¡¡¡FROM v$session se,
-¡¡¡¡v$sort_usage su
-¡¡¡¡WHERE se.saddr=su.session_addr;
+ã€€ã€€sid,
+ã€€ã€€serial#,
+ã€€ã€€sql_address,
+ã€€ã€€machine,
+ã€€ã€€program,
+ã€€ã€€tablespace,
+ã€€ã€€segtype,
+ã€€ã€€contents
+ã€€ã€€FROM v$session se,
+ã€€ã€€v$sort_usage su
+ã€€ã€€WHERE se.saddr=su.session_addr;
 
 ---undo
 select segment_name,status,count(*) from DBA_UNDO_EXTENTS
 group by segment_name,status
 
---²é¿´session×ÊÔ´Çé¿ö£¨µ±Ç°)
+--æŸ¥çœ‹sessionèµ„æºæƒ…å†µï¼ˆå½“å‰)
  select a.*,b.name from v$sesstat a,V$STATNAME b where a.STATISTIC#=b.STATISTIC# 
  
---²é¿´asm´ÅÅÌ
+--æŸ¥çœ‹asmç£ç›˜
 powermt display dev=emcpowercy
 
----°´´óĞ¡²éÕÒÅÅ³ıalert²¢ÒÆ¶¯µ½trac
+---æŒ‰å¤§å°æŸ¥æ‰¾æ’é™¤alertå¹¶ç§»åŠ¨åˆ°trac
 find ./ -size +1M -type f ! -name alert_maxguage1.log -exec mv {} trac \;
 
 oradebug setmypid
@@ -82,17 +83,17 @@ quit
 oradebug setmypid 42802
 oradebug unlimit
 oradebug -g all hanganalyze 3 
-µÈ1~2·ÖÖÓ
+ç­‰1~2åˆ†é’Ÿ
 
----²é¿´'library cache lock' Ëø×¡µÄ¶ÔÏó
-²é¿´hanganalyzeµÄtrace
-'100*mode+namespace = 0x4f0003 --È¡Ç°4Î» 16½øÖÆ×ª»»10½øÖÆ --79
+---æŸ¥çœ‹'library cache lock' é”ä½çš„å¯¹è±¡
+æŸ¥çœ‹hanganalyzeçš„trace
+'100*mode+namespace = 0x4f0003 --å–å‰4ä½ 16è¿›åˆ¶è½¬æ¢10è¿›åˆ¶ --79
 
 SELECT indx,kglstdsc FROM x$kglst
-WHERE kglsttyp='NAMESPACE' and indx=79; ----²é¿´Ëø×¡µÄ¶ÔÏó
+WHERE kglsttyp='NAMESPACE' and indx=79; ----æŸ¥çœ‹é”ä½çš„å¯¹è±¡
 
 
---²é¿´±íÒıÓÃÍâ¼ü
+--æŸ¥çœ‹è¡¨å¼•ç”¨å¤–é”®
   select c1.table_name      as org_table_name,
          c1.constraint_name as org_constraint_name,
          c1.constraint_type as org_constriant_type,
@@ -115,16 +116,16 @@ WHERE kglsttyp='NAMESPACE' and indx=79; ----²é¿´Ëø×¡µÄ¶ÔÏó
      and n2.owner = c2.owner
      and n2.constraint_name = c2.constraint_name;
 
---¿ìËÙÉ±»Ø»°
+--å¿«é€Ÿæ€å›è¯
 ALTER SYSTEM KILL SESSION 'sid,serial#' IMMEDIATE 
 
---Çå³ş»á»°cache
+--æ¸…æ¥šä¼šè¯cache
  alter session set events 'immediate trace name flush_cache'; 
 
 /*+ materialize */
- /*+driving_site(main)*/ ³éÈ¡±íµ½main¿â
+ /*+driving_site(main)*/ æŠ½å–è¡¨åˆ°mainåº“
 
---²é¿´±í×îºódml²Ù×÷Ê±¼ä
+--æŸ¥çœ‹è¡¨æœ€ådmlæ“ä½œæ—¶é—´
 SELECT max(ora_rowscn) FROM zhuliang.ZHUL_KPI_2014PHOTO_USERS
 select scn_to_timestamp(14582723254993)  from dual;
 
@@ -138,7 +139,7 @@ oradebug tracefile_name;
 oradebug event 10046 trace name context off;
 alter session set db_file_multiblock_read_count=128;
 
---²é¿´°ó¶¨±äÁ¿
+--æŸ¥çœ‹ç»‘å®šå˜é‡
 select dbms_sqltune.extract_binds(bind_data) bind,ANYDATA.accesstimestamp (value_anydata) from v$sql ;
 
  select position, value_string from table(dbms_sqltune.extract_binds('BEDA0B20040058BFD67A000101F0021602C102'))
@@ -146,7 +147,7 @@ select dbms_sqltune.extract_binds(bind_data) bind,ANYDATA.accesstimestamp (value
 SELECT SQL_ID,NAME, POSITION, value_string,  ANYDATA.accesstimestamp (value_anydata)
   From V$sql_Bind_Capture A
 
---²é¿´Ê±¼ä¶ÎÄÚµÄsqlºÍevent
+--æŸ¥çœ‹æ—¶é—´æ®µå†…çš„sqlå’Œevent
  select count(*), sql_id, event
   from (SELECT a.*
           FROM dba_hist_active_sess_history a
@@ -156,30 +157,30 @@ SELECT SQL_ID,NAME, POSITION, value_string,  ANYDATA.accesstimestamp (value_anyd
  group by sql_id, event
  order by 1 desc
  
-     v$session_wait                           £¨µ±Ç°ÕıÔÚ·¢Éú£©
-    v$session_wait_history             £¨»á»°×î½üµÄ10´ÎµÈ´ıÊÂ¼ş£©
-    v$active_session_history          £¨ÄÚ´æÖĞµÄASH²É¼¯ĞÅÏ¢£¬ÀíÂÛÎª1Ğ¡Ê±£©
-    wrh$_active_session_history    £¨Ğ´ÈëAWR¿âÖĞµÄASHĞÅÏ¢£¬ÀíÂÛÎª1Ğ¡Ê±ÒÔÉÏ£©
-    dba_hist_active_sess_history   £¨¸ù¾İwrh$_active_session_historyÉú³ÉµÄÊÓÍ¼£©
+     v$session_wait                           ï¼ˆå½“å‰æ­£åœ¨å‘ç”Ÿï¼‰
+    v$session_wait_history             ï¼ˆä¼šè¯æœ€è¿‘çš„10æ¬¡ç­‰å¾…äº‹ä»¶ï¼‰
+    v$active_session_history          ï¼ˆå†…å­˜ä¸­çš„ASHé‡‡é›†ä¿¡æ¯ï¼Œç†è®ºä¸º1å°æ—¶ï¼‰
+    wrh$_active_session_history    ï¼ˆå†™å…¥AWRåº“ä¸­çš„ASHä¿¡æ¯ï¼Œç†è®ºä¸º1å°æ—¶ä»¥ä¸Šï¼‰
+    dba_hist_active_sess_history   ï¼ˆæ ¹æ®wrh$_active_session_historyç”Ÿæˆçš„è§†å›¾ï¼‰
 
---²éÑ¯³¤Ê±¼äsql
+--æŸ¥è¯¢é•¿æ—¶é—´sql
 select * from table(dbms_xplan.display_cursor('3ufax4z2a37j2',null,'ALLSTATS LAST PEEKED_BINDS'));
 SELECT s.SID,
-   sum(S.TIME_REMAINING) || 'Ãë' "»¹ÒªÖ´ĞĞ¶à¾Ã",
-    sum(S.ELAPSED_SECONDS) || 'Ãë' "ÒÑ¾­Ö´ĞĞÁË¶à¾Ã",
-        SUM(ROUND(S.SOFAR * 100 / S.TOTALWORK, 0)) / COUNT(S.SID) || '%' "½ø¶ÈÊıÖµ"
+   sum(S.TIME_REMAINING) || 'ç§’' "è¿˜è¦æ‰§è¡Œå¤šä¹…",
+    sum(S.ELAPSED_SECONDS) || 'ç§’' "å·²ç»æ‰§è¡Œäº†å¤šä¹…",
+        SUM(ROUND(S.SOFAR * 100 / S.TOTALWORK, 0)) / COUNT(S.SID) || '%' "è¿›åº¦æ•°å€¼"
    FROM gV$SESSION_LONGOPS S
    where SID = 232
    group by SID
 
 
-----SPÈç¹û±¨´í´òÓ¡ĞÅÏ¢
+----SPå¦‚æœæŠ¥é”™æ‰“å°ä¿¡æ¯
 exception when others then
   v_err_info:=dbms_utility.format_error_backtrace || dbms_utility.format_error_stack ;
   v_err_info:=replace(replace(v_err_info,chr(10),' '),chr(13),' ');
   dbms_output.put_line(v_err_info);
  
- -----²é¿´»º´æÊı¾İÁ¿
+ -----æŸ¥çœ‹ç¼“å­˜æ•°æ®é‡
  select NUM_BUF,HEADER from X$KCBOQH where OBJ#=4959086
 
 alter session set statistics_level=ALL;
@@ -187,7 +188,7 @@ select * from table(dbms_xplan.display_cursor('42uy0rh3gg0ys','0','ADVANCED ALLS
 select * from table(dbms_xplan.display_cursor('75rcnhggwzhk6',null,'ADVANCED ALLSTATS LAST PEEKED_BINDS'));
 select * from table(dbms_xplan.display_cursor(null,null,'ADVANCED ALLSTATS LAST PEEKED_BINDS'));
 
----¹Ø±ÕÊı¾İ¿â£¬¼ì²éÎÄ¼şÍ·scnµÄ²îÖµ
+---å…³é—­æ•°æ®åº“ï¼Œæ£€æŸ¥æ–‡ä»¶å¤´scnçš„å·®å€¼
 set linesize 400
 col dfname format a40
 select id,
@@ -207,12 +208,12 @@ select id,
 order by scn_view.id;
 
 
----²é¿´redo£¬undo
+---æŸ¥çœ‹redoï¼Œundo
 select ss.name,ms.value  from v$mystat ms,v$sysstat ss
 where ms.statistic#=ss.statistic#
 and ss.name in ('undo change vector size','redo size');
 
-----Òşº¬²ÎÊı
+----éšå«å‚æ•°
 select a.ksppinm name,b.ksppstvl value,a.ksppdesc description
 from x$ksppi a,x$ksppcv b
 where a.inst_id = USERENV ('Instance')
@@ -220,7 +221,7 @@ and b.inst_id = USERENV ('Instance')
 and a.indx = b.indxr
 and a.ksppinm in ('_small_table_threshold')
 
----²é¿´ÊÂÎïµÄ²úÉúµÄundo
+---æŸ¥çœ‹äº‹ç‰©çš„äº§ç”Ÿçš„undo
 select used_ublk,ubablk from v$transaction where addr=(select taddr from v$
 session where sid=11);
 
@@ -233,22 +234,22 @@ ps -ef|grep LOCAL=NO|grep -v grep|awk '{print "kill -9 " $2}' |sh
 
  select ora_hash(sub_cumulate_item,3)+1,COUNT(*) from data_sync.cbs_user_disct_detail_cumulate
  GROUP BY ora_hash(sub_cumulate_item,3)+1                                                     
-=============io ¶à¿é===
+=============io å¤šå—===
      select f.file#,
        f.name,
        s.phyrds,
        s.phyblkrd,
-       s.readtim, --ËùÓĞµÄ¶ÁÈ¡¹¤×÷ĞÅÏ¢
+       s.readtim, --æ‰€æœ‰çš„è¯»å–å·¥ä½œä¿¡æ¯
        s.singleblkrds,
        s.singleblkrdtim, --Single Block I/O
-       (s.phyblkrd - s.singleblkrds) as multiblkrd, --Multi Block I/O´ÎÊı
-       (s.readtim - s.singleblkrdtim) as multiblkrdtim, --Multi Block I/OÊ±¼ä
+       (s.phyblkrd - s.singleblkrds) as multiblkrd, --Multi Block I/Oæ¬¡æ•°
+       (s.readtim - s.singleblkrdtim) as multiblkrdtim, --Multi Block I/Oæ—¶é—´
        round(s.singleblkrdtim /
              decode(s.singleblkrds, 0, 1, s.singleblkrds),
-             3) as singleblk_avgtim, --Single Block I/O Æ½¾ùµÈ´ıÊ±¼ä£¨cs£©
+             3) as singleblk_avgtim, --Single Block I/O å¹³å‡ç­‰å¾…æ—¶é—´ï¼ˆcsï¼‰
        round((s.readtim - s.singleblkrdtim) /
              nullif((s.phyblkrd - s.singleblkrds), 0),
-             3) as multiblk_avgtim --Multi Block I/O Æ½¾ùµÈ´ıÊ±¼ä£¨cs£©
+             3) as multiblk_avgtim --Multi Block I/O å¹³å‡ç­‰å¾…æ—¶é—´ï¼ˆcsï¼‰
   from v$filestat s, v$datafile f
  where s.file# = f.file#;
  
@@ -272,7 +273,7 @@ SQL> oradebug event 10513 trace name context forever, level 2
 4. Enable smon recovery again.
 SQL> oradebug event 10513 trace name context off
 
----·ÖÇø±í
+---åˆ†åŒºè¡¨
 with xs as
    (select x.*,
        to_date (substr (high_value, 11, 19), 'YYYY-MM-DD HH24:MI:SS') dates,
@@ -295,10 +296,10 @@ where xs.table_owner = 'ECM'
  AND datestr<>'MAXVALUE') WHERE TT<TO_DATE('2017-01-01','YYYY-MM-DD')
 
 
- ----ÊÕ¼¯Í³¼ÆĞÅÏ¢
+ ----æ”¶é›†ç»Ÿè®¡ä¿¡æ¯
  execute dbms_stats.gather_table_stats(ownname => 'owner',tabname => 'table_name' ,estimate_percent => null ,method_opt => 'for all indexed columns' ,cascade => true);
 
- ------ogg ÖØĞÂ³õÊ¼»¯
+ ------ogg é‡æ–°åˆå§‹åŒ–
  select DIRECTORY_NAME,DIRECTORY_PATH from DBA_DIRECTORIES;
 select current_scn from v$database;
 expdp system/zaByMcHa DIRECTORY=DATA_PUMP_DIR DUMPFILE=T_SONP_PREFERENCE.dmp LOGFILE=T_SONP_PREFERENCE.log COMPRESSION=all tables=SONP.T_SONP_PREFERENCE FLASHBACK_SCN=97525327146 CLUSTER=N &
@@ -367,13 +368,13 @@ CREATE RESTORE POINT ONSTAR_ROLLBACK GUARANTEE FLASHBACK DATABASE;
 
 DROP RESTORE POINT ONSTAR_ROLLBACK;
 
------ĞŞ¸Ädb_name
+-----ä¿®æ”¹db_name
 create pfile
 cluster_database=false
 startup mount
 nid target=sys/qvCOn4oY dbname=p9msp  logfile=/tmp/nidmsp.log
 
-----²é¿´asmÎÄ¼ş´óĞ¡
+----æŸ¥çœ‹asmæ–‡ä»¶å¤§å°
 select PARENT_INDEX,group_number from V$ASM_ALIAS A where name in ('IDT7GGIS');
 
 col fn format a30
@@ -390,7 +391,7 @@ select sum(bytes) / 1024 / 1024 / 1024 g, fn
  group by fn
  order by 1 desc
  
---²é¿´sqlÖ´ĞĞ¼Æ»®
+--æŸ¥çœ‹sqlæ‰§è¡Œè®¡åˆ’
  SELECT plan_hash_value,
          id,
          LPAD (' ', DEPTH) || operation operation,
